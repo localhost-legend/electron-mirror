@@ -1,3 +1,4 @@
+const fs = require('fs');
 require('dotenv').config();
 const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
@@ -8,6 +9,8 @@ const net = require('net');
 const WebSocket = require('ws');
 
 let mainWindow;
+let launcherWindow;
+let SELECTED_SERIAL = process.env.DEVICE_SERIAL || null; // Will be set by Launcher
 
 function getScrcpyConfig() {
     const platform = process.platform;
@@ -27,7 +30,7 @@ function getScrcpyConfig() {
         return {
             scrcpyServerPath: process.env.SCRCPY_SERVER_PATH || '/opt/homebrew/Cellar/scrcpy/3.3.4/share/scrcpy/scrcpy-server',
             adbPath: process.env.ADB_PATH || 'adb',
-            deviceSerial: process.env.DEVICE_SERIAL 
+            deviceSerial: process.env.DEVICE_SERIAL
         };
     }
 
@@ -63,7 +66,21 @@ function updateWindowAspectRatio() {
     mainWindow.setAspectRatio(targetRatio);
 }
 
-function createWindow() {
+function createLauncherWindow() {
+    launcherWindow = new BrowserWindow({
+        width: 450,
+        height: 600,
+        resizable: false,
+        title: "Select Device",
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+    launcherWindow.loadFile('launcher.html');
+}
+
+function createMainWindow() {
     const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
     const defaultWidth = 1280;
     const defaultHeight = 720;
@@ -138,7 +155,60 @@ function snapWindowToRatio() {
 }
 
 app.whenReady().then(() => {
-    createWindow();
+    // If SERIAL is explicitly set in .env, maybe skip launcher? 
+    // User requested launcher back, so we ALWAYS show launcher unless they customized logic (or we can auto-connect if env is set, but let's stick to launcher for now as requested).
+    createLauncherWindow();
+});
+
+// --- IPC Handlers (Launcher) ---
+ipcMain.handle('get-devices', async () => {
+    try {
+        const devices = await client.listDevices();
+        // Enrich with model names AND aliases
+        const enriched = await Promise.all(devices.map(async (d) => {
+            let model = 'Unknown';
+            try {
+                // adb -s <serial> shell getprop ro.product.model
+                const props = await client.getProperties(d.id);
+                model = props['ro.product.model'] || 'Android Device';
+            } catch (e) { }
+
+            let alias = null;
+            if (deviceConfig[d.id] && deviceConfig[d.id].alias) {
+                alias = deviceConfig[d.id].alias;
+            }
+
+            return { id: d.id, model, alias };
+        }));
+        return enriched;
+    } catch (e) {
+        console.error("ADB Error:", e);
+        return [];
+    }
+});
+
+ipcMain.on('connect-device', async (event, serial) => {
+    console.log(`[Launcher] Selected device: ${serial}`);
+    SELECTED_SERIAL = serial;
+
+    // UI Feedback: Launcher is already showing "Connecting..."
+
+    try {
+        await startScrcpy();
+
+        // Success: Close Launcher, Open Main
+        if (launcherWindow) {
+            launcherWindow.close();
+            launcherWindow = null;
+        }
+        createMainWindow();
+    } catch (e) {
+        console.error("[Main] Connection Failed:", e);
+        // Send error back to launcher
+        if (launcherWindow && !launcherWindow.isDestroyed()) {
+            launcherWindow.webContents.send('connection-failed', e.message);
+        }
+    }
 });
 
 // Snap Ratio IPC
@@ -160,6 +230,83 @@ ipcMain.on('resize-window', (event, sidebarWidth) => {
     }
 });
 
+// --- Keymap Profile Management IPC ---
+const KEYMAPS_DIR = path.join(__dirname, 'keymaps');
+if (!fs.existsSync(KEYMAPS_DIR)) fs.mkdirSync(KEYMAPS_DIR);
+
+ipcMain.handle('get-keymaps', async () => {
+    try {
+        const files = fs.readdirSync(KEYMAPS_DIR).filter(f => f.endsWith('.json'));
+        return files;
+    } catch (e) { console.error(e); return []; }
+});
+
+ipcMain.handle('save-keymap', async (event, name, data) => {
+    try {
+        const safeName = name.replace(/[^a-z0-9_\-\.]/gi, '_');
+        const filePath = path.join(KEYMAPS_DIR, safeName.endsWith('.json') ? safeName : safeName + '.json');
+        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+        return { success: true, filename: path.basename(filePath) };
+    } catch (e) { return { success: false, error: e.message }; }
+});
+
+const { dialog } = require('electron');
+ipcMain.handle('save-keymap-dialog', async (event, data) => {
+    // Show native save dialog
+    const result = await dialog.showSaveDialog(mainWindow, {
+        title: 'Save Keymap Profile',
+        defaultPath: path.join(KEYMAPS_DIR, 'new_profile.json'),
+        filters: [{ name: 'Keymap JSON', extensions: ['json'] }]
+    });
+
+    if (result.canceled || !result.filePath) return { success: false };
+
+    try {
+        fs.writeFileSync(result.filePath, JSON.stringify(data, null, 2));
+        return { success: true, filename: path.basename(result.filePath) };
+    } catch (e) { return { success: false, error: e.message }; }
+});
+
+ipcMain.handle('load-keymap', async (event, name) => {
+    try {
+        const filePath = path.join(KEYMAPS_DIR, name);
+        if (fs.existsSync(filePath)) {
+            return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        }
+        return {};
+    } catch (e) { return {}; }
+});
+
+// --- Device Aliasing (devices.json) ---
+const DEVICES_FILE = path.join(__dirname, 'devices.json');
+let deviceConfig = {};
+if (fs.existsSync(DEVICES_FILE)) {
+    try { deviceConfig = JSON.parse(fs.readFileSync(DEVICES_FILE, 'utf8')); } catch (e) { }
+}
+
+function saveDeviceConfig() {
+    fs.writeFileSync(DEVICES_FILE, JSON.stringify(deviceConfig, null, 2));
+}
+
+ipcMain.handle('get-device-alias', async (event, serial) => {
+    // If specific serial provided, check that
+    const s = serial || SELECTED_SERIAL;
+    if (deviceConfig[s] && deviceConfig[s].alias) {
+        return deviceConfig[s].alias;
+    }
+    return s || 'default';
+});
+
+ipcMain.handle('set-device-alias', async (event, serial, alias) => {
+    if (!deviceConfig[serial]) deviceConfig[serial] = {};
+    deviceConfig[serial].alias = alias;
+    saveDeviceConfig();
+    return true;
+});
+
+ipcMain.handle('get-current-serial', () => SELECTED_SERIAL);
+
+
 // WebSocket Server (Video/Control)
 const wss = new WebSocket.Server({ port: 8080 });
 const wssAudio = new WebSocket.Server({ port: 8081 });
@@ -167,85 +314,122 @@ const wssAudio = new WebSocket.Server({ port: 8081 });
 console.log("WS (Video/Control) on 8080");
 console.log("WS (Audio) on 8081");
 
-let videoSocket = null;
-let audioSocket = null;
-let controlSocket = null;
+let videoSocket = null, audioSocket = null, controlSocket = null;
 let isScrcpyStarted = false;
 
+// Stream History Buffer
+let streamHistory = [];
+
 wss.on('connection', (ws) => {
-    console.log("[WSS-Video] Client connected!");
-    ws.on('message', (message) => {
+    console.log("[WSS-Video] Desktop Client connected");
+
+    // Send History first!
+    if (streamHistory.length > 0) {
+        console.log(`[WSS] Sending ${streamHistory.length} buffered chunks to new client`);
+        streamHistory.forEach(chunk => ws.send(chunk));
+    }
+
+    ws.on('message', (msg) => {
         if (controlSocket && !controlSocket.destroyed) {
-            try { controlSocket.write(message); } catch (e) { }
+            try { controlSocket.write(msg); } catch (e) { }
         }
     });
-
-    if (!isScrcpyStarted) {
-        isScrcpyStarted = true;
-        startScrcpy();
-    }
 });
 
 wssAudio.on('connection', (ws) => {
     console.log("[WSS-Audio] Client connected!");
 });
 
-async function startScrcpy() {
-    try {
-        console.log(`[ADB] Connecting to ${DEVICE_SERIAL}...`);
+// Helper to log to console AND frontend
+function log(msg) {
+    console.log(msg);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('server-log', msg);
+    }
+}
 
-        await client.push(DEVICE_SERIAL, SCRCPY_SERVER_PATH, '/data/local/tmp/scrcpy-server.jar');
-        console.log("[ADB] Server pushed.");
+function connectSockets(port) {
+    log("[Node] Connecting to Video Socket...");
+    videoSocket = net.connect(port, '127.0.0.1', () => {
+        log("[Node] Video Socket Connected!");
 
-        const port = 27199;
-        await client.forward(DEVICE_SERIAL, `tcp:${port}`, 'localabstract:scrcpy');
-        console.log(`[ADB] Forward set: tcp:${port} -> localabstract:scrcpy`);
+        videoSocket.on('data', (d) => {
+            // Log first packet only
+            if (streamHistory.length === 0) log(`[Node] First Video Packet: ${d.length} bytes`);
 
-        // HiDPI: max_size=1920
-        const cmd = `CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 3.3.4 video_codec=h264 max_size=1920 max_fps=60 tunnel_forward=true control=true audio=true audio_codec=raw audio_encoder=scrcpy send_device_meta=true send_frame_meta=true send_dummy_byte=true send_codec_meta=true`;
+            // 1. Buffer data
+            if (wss.clients.size === 0 || streamHistory.length < 100) {
+                streamHistory.push(d);
+                if (streamHistory.length > 5000) streamHistory.shift();
+            }
+            // 2. Broadcast
+            wss.clients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(d); });
+        });
 
-        let proc;
-        if (process.platform === 'win32') {
-            proc = spawn(ADB_PATH, ['-s', DEVICE_SERIAL, 'shell', cmd]);
-        } else {
-            proc = spawn('adb', ['-s', DEVICE_SERIAL, 'shell', cmd]); // macOS reference
-        }
-        proc.stdout.on('data', (data) => console.log(`[Server] ${data}`));
-        proc.stderr.on('data', (data) => console.error(`[Server ERR] ${data}`));
-        proc.on('exit', (code) => console.log(`[Server] Exited with code ${code}`));
+        videoSocket.on('error', (e) => log(`[Node] Video Socket Error: ${e.message}`));
 
         setTimeout(() => {
-            console.log("[Node] Connecting to Video Socket...");
-            videoSocket = net.connect(port, '127.0.0.1', () => {
-                console.log("[Node] Video Socket Connected!");
-                videoSocket.on('error', (e) => console.error("[Node] Video Socket Error:", e));
-                videoSocket.on('data', (chunk) => {
-                    wss.clients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(chunk); });
+            log("[Node] Connecting to Audio...");
+            audioSocket = net.connect(port, '127.0.0.1', () => {
+                log("[Node] Audio Connected");
+                audioSocket.on('data', (d) => {
+                    wssAudio.clients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(d); });
                 });
 
                 setTimeout(() => {
-                    console.log("[Node] Connecting to Audio Socket...");
-                    audioSocket = net.connect(port, '127.0.0.1', () => {
-                        console.log("[Node] Audio Socket Connected!");
-                        audioSocket.on('error', (e) => console.error("[Node] Audio Socket Error:", e));
-                        audioSocket.on('data', (chunk) => {
-                            wssAudio.clients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(chunk); });
-                        });
-
-                        setTimeout(() => {
-                            console.log("[Node] Connecting to Control Socket...");
-                            controlSocket = net.connect(port, '127.0.0.1', () => {
-                                console.log("[Node] Control Socket Connected!");
-                                controlSocket.on('data', () => { });
-                                controlSocket.on('error', (e) => console.error("[Node] Control Socket Error:", e));
-                            });
-                        }, 200);
-                    });
-                }, 200);
+                    controlSocket = net.connect(port, '127.0.0.1', () => log("[Node] Control Connected"));
+                }, 100);
             });
-        }, 2000);
+        }, 100);
+    });
+}
+
+async function startScrcpy() {
+    if (isScrcpyStarted) { log("Scrcpy already started"); return; }
+    isScrcpyStarted = true;
+
+    try {
+        const serial = SELECTED_SERIAL;
+        if (!serial) throw new Error("No Serial Selected");
+
+        if (!fs.existsSync(SCRCPY_SERVER_PATH)) {
+            throw new Error(`Scrcpy Server JAR not found at: ${SCRCPY_SERVER_PATH}`);
+        }
+
+        log(`[ADB] Pushing Server to ${serial}...`);
+        const transfer = await client.push(serial, SCRCPY_SERVER_PATH, '/data/local/tmp/scrcpy-server.jar');
+        await new Promise((resolve, reject) => {
+            transfer.on('end', resolve);
+            transfer.on('error', reject);
+        });
+        log("[ADB] Server pushed.");
+
+        const port = 27199;
+        await client.forward(serial, `tcp:${port}`, 'localabstract:scrcpy');
+        log(`[ADB] Forwarded tcp:${port}`);
+
+        const cmd = `CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 3.3.4 video_codec=h264 max_size=1920 max_fps=60 tunnel_forward=true control=true audio=true audio_codec=raw audio_encoder=scrcpy send_device_meta=true send_frame_meta=true send_dummy_byte=true send_codec_meta=true`;
+
+        const logProc = (proc) => {
+            proc.stdout.on('data', (d) => log(`[Server] ${d}`));
+            proc.stderr.on('data', (d) => console.error(`[Server ERR] ${d}`)); // Keep errors in console to avoid spam? No, send partial?
+            proc.on('exit', (code) => log(`[Server] Exited with code ${code}`));
+        }
+
+        let proc;
+        if (process.platform === 'win32') {
+            proc = spawn(ADB_PATH, ['-s', serial, 'shell', cmd]);
+        } else {
+            proc = spawn(ADB_PATH, ['-s', serial, 'shell', cmd]);
+        }
+        logProc(proc);
+
+        // SAFE MODE: 2s delay
+        setTimeout(() => connectSockets(port), 2000);
 
     } catch (e) {
-        console.error("Error:", e);
+        log(`Scrcpy Start Error: ${e.message}`);
+        isScrcpyStarted = false;
+        throw e;
     }
 }

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Select Device</title>
+    <style>
+        body {
+            background: #222;
+            color: #fff;
+            font-family: system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #eee;
+        }
+
+        #device-list {
+            width: 100%;
+            max-width: 400px;
+            background: #333;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .device-item {
+            padding: 15px 20px;
+            border-bottom: 1px solid #444;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .device-item:last-child {
+            border-bottom: none;
+        }
+
+        .device-item:hover {
+            background: #444;
+        }
+
+        .device-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .device-model {
+            font-weight: 600;
+            font-size: 16px;
+            color: #fff;
+        }
+
+        .device-serial {
+            font-size: 12px;
+            color: #aaa;
+            margin-top: 4px;
+        }
+
+        .btn-connect {
+            padding: 8px 16px;
+            background: #007AFF;
+            border: none;
+            border-radius: 6px;
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .btn-connect:hover {
+            background: #0062cc;
+        }
+
+        #loading {
+            color: #888;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+
+        #btn-refresh {
+            margin-top: 20px;
+            background: transparent;
+            border: 1px solid #555;
+            color: #aaa;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        #btn-refresh:hover {
+            border-color: #888;
+            color: #fff;
+        }
+    </style>
+</head>
+
+<body>
+    <h2>Select Android Device</h2>
+    <div id="device-list">
+        <!-- Devices will be injected here -->
+    </div>
+    <div id="loading">Scanning for devices...</div>
+    <button id="btn-refresh">Refresh List</button>
+
+    <script src="launcher.js"></script>
+</body>
+
+</html>

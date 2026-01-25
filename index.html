@@ -2,6 +2,7 @@
 <html>
 
 <head>
+    <meta charset="UTF-8">
     <title>Electron Scrcpy Mirror</title>
     <style>
         body {
@@ -191,7 +192,74 @@
             color: #fff;
         }
 
+        /* Loading Overlay */
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #111;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: opacity 0.5s;
+        }
+
+        .loader {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #333;
+            border-top: 4px solid #007AFF;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .tip {
+            margin-top: 20px;
+            color: #888;
+            font-size: 14px;
+            max-width: 300px;
+            text-align: center;
+            line-height: 1.5;
+        }
+
+        /* Key Mapper Widgets */
+        .key-widget {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #fff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #fff;
+            font-weight: bold;
+            font-size: 16px;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            cursor: move;
+            user-select: none;
+            text-transform: uppercase;
+        }
+
+        /* Sidebar collapsed btn */
         #sidebar.collapsed~#btn-expand {
+
             display: flex;
         }
     </style>
@@ -199,6 +267,12 @@
 
 <body>
     <div id="app">
+        <!-- Loading Overlay -->
+        <div id="loading-overlay">
+            <div class="loader"></div>
+            <div class="tip" id="daily-tip">正在連線至裝置...<br>Tip: 您可以使用 .env 檔案來管理設備序號。</div>
+        </div>
+
         <canvas id="videoCanvas"></canvas>
         <div id="status">Waiting for connection...</div>
 
@@ -253,6 +327,16 @@
         </div>
 
         <div class="spacer"></div>
+
+
+
+        <!-- Key Mapper Toggle (Gamepad) -->
+        <div class="btn" id="btn-mapper" title="Key Mapping">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+            </svg>
+        </div>
 
         <!-- Volume Up (24) -->
         <div class="btn" id="btn-vol-up" title="Vol+">
