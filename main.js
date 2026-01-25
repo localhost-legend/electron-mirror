@@ -1,4 +1,5 @@
-const { app, BrowserWindow, ipcMain } = require('electron');
+require('dotenv').config();
+const { app, BrowserWindow, ipcMain, screen } = require('electron');
 const path = require('path');
 const adb = require('adbkit');
 const client = adb.createClient({ host: '127.0.0.1', port: 5037 });
@@ -7,18 +8,72 @@ const net = require('net');
 const WebSocket = require('ws');
 
 let mainWindow;
-const SCRCPY_SERVER_PATH = '/opt/homebrew/Cellar/scrcpy/3.3.4/share/scrcpy/scrcpy-server';
-const DEVICE_SERIAL = 'emulator-5556';
+
+function getScrcpyConfig() {
+    const platform = process.platform;
+
+    if (platform === 'win32') {
+        // win32 reference
+        const scrcpyDir = path.join(__dirname, 'scrcpy-win64-v3.3.4');
+        return {
+            scrcpyServerPath: path.join(scrcpyDir, 'scrcpy-server'),
+            adbPath: path.join(scrcpyDir, 'adb.exe'),
+            deviceSerial: process.env.DEVICE_SERIAL
+        };
+    }
+
+    if (platform === 'darwin') {
+        // macOS reference
+        return {
+            scrcpyServerPath: process.env.SCRCPY_SERVER_PATH || '/opt/homebrew/Cellar/scrcpy/3.3.4/share/scrcpy/scrcpy-server',
+            adbPath: process.env.ADB_PATH || 'adb',
+            deviceSerial: process.env.DEVICE_SERIAL 
+        };
+    }
+
+    throw new Error(`Unsupported platform: ${platform}`);
+}
+
+const { scrcpyServerPath: SCRCPY_SERVER_PATH, adbPath: ADB_PATH, deviceSerial: DEVICE_SERIAL } = getScrcpyConfig();
 
 // State for Magnetic Snap
-let currentVideoRatio = 16 / 9;
+let currentVideoRatio = 9 / 16;
 let currentSidebarWidth = 48; // Dynamic State
 let resizeTimeout = null;
 
+function updateWindowAspectRatio() {
+    if (!mainWindow) return;
+
+    const [wW, wH] = mainWindow.getSize();
+    const [cW, cH] = mainWindow.getContentSize();
+
+    if (cH <= 0) return;
+
+    const chromeWidth = wW - cW;
+    const chromeHeight = wH - cH;
+
+    const videoHeight = cH;
+    const videoWidth = Math.max(1, Math.round(videoHeight * currentVideoRatio));
+    const contentWidth = videoWidth + currentSidebarWidth;
+
+    const windowWidth = contentWidth + chromeWidth;
+    const windowHeight = videoHeight + chromeHeight;
+
+    const targetRatio = windowWidth / windowHeight;
+    mainWindow.setAspectRatio(targetRatio);
+}
+
 function createWindow() {
+    const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+    const defaultWidth = 1280;
+    const defaultHeight = 720;
+    const windowWidth = Math.min(defaultWidth, screenWidth);
+    const windowHeight = Math.min(defaultHeight, screenHeight);
+
     mainWindow = new BrowserWindow({
-        width: 1280,
-        height: 720,
+        width: windowWidth,
+        height: windowHeight,
+        center: true,
         backgroundColor: '#000',
         webPreferences: {
             nodeIntegration: true,
@@ -28,6 +83,7 @@ function createWindow() {
 
     mainWindow.loadFile('index.html');
     setupWindowListeners();
+    updateWindowAspectRatio();
 }
 
 function setupWindowListeners() {
@@ -52,19 +108,33 @@ function snapWindowToRatio() {
     // Use dynamic state
     const SIDEBAR_WIDTH = currentSidebarWidth;
 
-    // We calculate the TARGET VIDEO WIDTH (Content - Sidebar)
-    const videoWidth = cW - SIDEBAR_WIDTH;
+    const { width: screenWidth, height: screenHeight } = screen.getPrimaryDisplay().workAreaSize;
+    const maxContentWidth = Math.max(0, screenWidth - chromeWidth);
+    const maxContentHeight = Math.max(0, screenHeight - chromeHeight);
+
+    // Start from current content width, but keep within screen
+    let targetContentWidth = Math.min(cW, maxContentWidth);
+    let videoWidth = targetContentWidth - SIDEBAR_WIDTH;
     if (videoWidth <= 0) return;
 
-    // Calculate required Height for this Video Width
-    const targetVideoHeight = Math.round(videoWidth / currentVideoRatio);
+    // Calculate height for this video width
+    let targetVideoHeight = Math.round(videoWidth / currentVideoRatio);
+
+    // If height exceeds screen, scale down while keeping ratio
+    if (targetVideoHeight > maxContentHeight) {
+        targetVideoHeight = maxContentHeight;
+        videoWidth = Math.round(targetVideoHeight * currentVideoRatio);
+        targetContentWidth = videoWidth + SIDEBAR_WIDTH;
+    }
 
     const targetWindowHeight = targetVideoHeight + chromeHeight;
-    const targetWindowWidth = cW + chromeWidth;
+    const targetWindowWidth = targetContentWidth + chromeWidth;
 
     if (Math.abs(wH - targetWindowHeight) > 2) {
         mainWindow.setSize(targetWindowWidth, targetWindowHeight);
     }
+
+    updateWindowAspectRatio();
 }
 
 app.whenReady().then(() => {
@@ -76,6 +146,7 @@ ipcMain.on('set-aspect-ratio', (event, width, height) => {
     if (mainWindow) {
         currentVideoRatio = width / height;
         snapWindowToRatio();
+        updateWindowAspectRatio();
     }
 });
 
@@ -85,6 +156,7 @@ ipcMain.on('resize-window', (event, sidebarWidth) => {
         console.log(`[Main] Sidebar Resize: ${sidebarWidth}`);
         currentSidebarWidth = sidebarWidth;
         snapWindowToRatio();
+        updateWindowAspectRatio();
     }
 });
 
@@ -132,8 +204,12 @@ async function startScrcpy() {
         // HiDPI: max_size=1920
         const cmd = `CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server 3.3.4 video_codec=h264 max_size=1920 max_fps=60 tunnel_forward=true control=true audio=true audio_codec=raw audio_encoder=scrcpy send_device_meta=true send_frame_meta=true send_dummy_byte=true send_codec_meta=true`;
 
-        const proc = spawn('adb', ['-s', DEVICE_SERIAL, 'shell', cmd]);
-
+        let proc;
+        if (process.platform === 'win32') {
+            proc = spawn(ADB_PATH, ['-s', DEVICE_SERIAL, 'shell', cmd]);
+        } else {
+            proc = spawn('adb', ['-s', DEVICE_SERIAL, 'shell', cmd]); // macOS reference
+        }
         proc.stdout.on('data', (data) => console.log(`[Server] ${data}`));
         proc.stderr.on('data', (data) => console.error(`[Server ERR] ${data}`));
         proc.on('exit', (code) => console.log(`[Server] Exited with code ${code}`));

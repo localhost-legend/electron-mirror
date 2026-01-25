@@ -17,8 +17,6 @@
 
 目前的版本為了開發方便，部分配置為硬編碼 (Hardcoded)，若需修改請至 `main.js`：
 
-- **設備序號 (Serial)**：預設連結 `emulator-5556`。
-- **Scrcpy Server 路徑**：指向 `/opt/homebrew/Cellar/scrcpy/...` (macOS 預設路徑)。
 - **通訊埠 (Ports)**：
     - 影像串流 WebSocket: `8080`
     - 音訊串流 WebSocket: `8081`
@@ -27,16 +25,30 @@
 ## 🚀 快速開始
 
 1. 確保您的安卓設備已開啟開發者模式並透過 ADB 連結。
-2. 安裝必要的系統組件：
+2. 安裝必要的系統組件： 
+   ### macOS:
    ```bash
    brew install android-platform-tools
    brew install scrcpy
    ```
+   ### Windows
+   將[scrcpy](https://github.com/Genymobile/scrcpy/releases)發布解壓縮至此目錄即可。
+   
 3. 安裝專案依賴：
    ```bash
    npm install
    ```
-4. 啟動應用程式：
+
+4. 環境變數
+   
+   創建`.env`並創立以下範本:
+   ```bash
+   SCRCPY_SERVER_PATH = 'PATH_TO_SCRCPY_SERVER';
+   ADB_PATH = 'PATH_TO_ADB';
+   DEVICE_SERIAL = 'YOUR_SERIAL';
+   ```
+
+5. 啟動應用程式：
    ```bash
    npm start
    ```

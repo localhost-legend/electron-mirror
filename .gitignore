@@ -1,5 +1,6 @@
 # Dependency directories
 node_modules/
+scrcpy-win64-v3.3.4
 
 # macOS metadata
 .DS_Store
@@ -28,3 +29,4 @@ build/
 .classpath
 .settings/
 .DS_Store
+.env

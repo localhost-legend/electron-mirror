@@ -7,8 +7,9 @@
     "start": "electron ."
   },
   "dependencies": {
-    "adbkit": "^2.11.1",
-    "electron": "^28.1.0",
+    "adbkit": "^2.0.17",
+    "dotenv": "^16.4.5",
+    "electron": "^40.0.0",
     "ws": "^8.16.0"
   }
 }
