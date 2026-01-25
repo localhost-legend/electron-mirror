@@ -13,42 +13,40 @@
 - **可收合側邊欄**：可隨時隱藏側邊框架，提供沉浸式的遊戲體驗。
 - **HiDPI 支援**：針對高解析度螢幕優化 UI 尺寸，支援 1080p+ 影像品質。
 
-## ⚙️ 技術配置 (目前寫死於 `main.js`)
+## ⚙️ 環境配置 (.env)
 
-目前的版本為了開發方便，部分配置為硬編碼 (Hardcoded)，若需修改請至 `main.js`：
+本專案支援使用 `.env` 檔案進行環境配置。請在專案根目錄建立 `.env` 檔案並填入以下內容：
 
-- **通訊埠 (Ports)**：
-    - 影像串流 WebSocket: `8080`
-    - 音訊串流 WebSocket: `8081`
-    - ADB 轉發通訊埠: `27199` -> `localabstract:scrcpy`
+```bash
+# 指定 Android 設備序號 (必填)
+DEVICE_SERIAL=emulator-5556
+
+# 自定義 Scrcpy Server 路徑 (選填，macOS 預設為 Homebrew 路徑)
+# SCRCPY_SERVER_PATH=/opt/homebrew/Cellar/scrcpy/3.3.4/share/scrcpy/scrcpy-server
+
+# 自定義 ADB 路徑 (選填)
+# ADB_PATH=adb
+```
+
+> **注意**：
+> 目前以下通訊埠為固定配置 (Hardcoded)：
+> - **影像 WebSocket**: `8080`
+> - **音訊 WebSocket**: `8081`
+> - **ADB 轉發**: `27199`
 
 ## 🚀 快速開始
 
 1. 確保您的安卓設備已開啟開發者模式並透過 ADB 連結。
-2. 安裝必要的系統組件： 
-   ### macOS:
+2. 安裝必要的系統組件：
    ```bash
    brew install android-platform-tools
    brew install scrcpy
    ```
-   ### Windows
-   將[scrcpy](https://github.com/Genymobile/scrcpy/releases)發布解壓縮至此目錄即可。
-   
 3. 安裝專案依賴：
    ```bash
    npm install
    ```
-
-4. 環境變數
-   
-   創建`.env`並創立以下範本:
-   ```bash
-   SCRCPY_SERVER_PATH = 'PATH_TO_SCRCPY_SERVER';
-   ADB_PATH = 'PATH_TO_ADB';
-   DEVICE_SERIAL = 'YOUR_SERIAL';
-   ```
-
-5. 啟動應用程式：
+4. 啟動應用程式：
    ```bash
    npm start
    ```
