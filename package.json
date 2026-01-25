@@ -1,0 +1,14 @@
+{
+  "name": "electron-mirror",
+  "version": "1.0.0",
+  "description": "High Performance Scrcpy Client",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "dependencies": {
+    "adbkit": "^2.11.1",
+    "electron": "^28.1.0",
+    "ws": "^8.16.0"
+  }
+}

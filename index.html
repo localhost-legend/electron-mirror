@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Electron Scrcpy Mirror</title>
+    <style>
+        body {
+            margin: 0;
+            background: #000;
+            overflow: hidden;
+            height: 100vh;
+            width: 100vw;
+            display: flex;
+            font-family: system-ui, -apple-system, sans-serif;
+            user-select: none;
+        }
+
+        #app {
+            flex: 1;
+            display: flex;
+            background: #000;
+            position: relative;
+            height: 100%;
+            overflow: hidden;
+            flex-direction: column;
+        }
+
+        canvas {
+            flex: 1;
+            width: 100%;
+            object-fit: contain;
+            display: block;
+        }
+
+        /* Sidebar 48px */
+        #sidebar {
+            width: 48px;
+            background: #1a1a1a;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 10px;
+            /* Reduced padding for toggle */
+            border-left: 1px solid #333;
+            z-index: 10;
+            transition: width 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+            overflow: hidden;
+            /* Hide contents when collapsed */
+        }
+
+        #sidebar.collapsed {
+            width: 0;
+            border-left: none;
+        }
+
+        .btn {
+            width: 40px;
+            height: 40px;
+            margin-bottom: 20px;
+            cursor: pointer;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            color: #bbb;
+            background: rgba(255, 255, 255, 0.05);
+            flex-shrink: 0;
+            /* Prevent squishing */
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+            transform: scale(1.05);
+        }
+
+        .btn:active {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(0.95);
+        }
+
+        .btn.active {
+            color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+            box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
+        }
+
+        svg {
+            width: 24px;
+            height: 24px;
+            fill: currentColor;
+            stroke-width: 0.5px;
+        }
+
+        .spacer {
+            flex: 1;
+        }
+
+        #status {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #0f0;
+            font-family: monospace;
+            font-size: 16px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 8px 12px;
+            border-radius: 6px;
+            pointer-events: none;
+            z-index: 5;
+            backdrop-filter: blur(4px);
+        }
+
+        /* Input Bar */
+        #ime-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 72px;
+            background: #ffffff;
+            display: flex;
+            align-items: center;
+            padding: 0 24px;
+            transform: translateY(100%);
+            transition: transform 0.2s cubic-bezier(0.2, 0.0, 0.2, 1);
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+            z-index: 20;
+        }
+
+        #ime-bar.visible {
+            transform: translateY(0);
+        }
+
+        #ime-input {
+            flex: 1;
+            background: #f2f2f7;
+            border: none;
+            color: #000;
+            padding: 14px 18px;
+            border-radius: 10px;
+            font-size: 18px;
+            outline: none;
+            margin-right: 16px;
+            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+
+        #ime-input::placeholder {
+            color: #8e8e93;
+        }
+
+        #btn-send {
+            padding: 12px 24px;
+            background: #007AFF;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            transition: background 0.2s;
+        }
+
+        #btn-send:hover {
+            background: #0062cc;
+        }
+
+        /* Floating Toggle Button (When Collapsed) */
+        #btn-expand {
+            position: absolute;
+            right: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 24px;
+            height: 48px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px 0 0 12px;
+            cursor: pointer;
+            display: none;
+            /* Hidden by default */
+            align-items: center;
+            justify-content: center;
+            color: #ccc;
+            z-index: 9;
+            transition: background 0.2s;
+        }
+
+        #btn-expand:hover {
+            background: rgba(255, 255, 255, 0.3);
+            color: #fff;
+        }
+
+        #sidebar.collapsed~#btn-expand {
+            display: flex;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <canvas id="videoCanvas"></canvas>
+        <div id="status">Waiting for connection...</div>
+
+        <div id="ime-bar">
+            <input type="text" id="ime-input" placeholder="在此輸入文字..." autocomplete="off">
+            <button id="btn-send">發送</button>
+        </div>
+
+        <!-- Floating Expand Button -->
+        <div id="btn-expand" title="Open Sidebar">
+            <svg viewBox="0 0 24 24" style="width:16px;height:16px;">
+                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
+            </svg>
+        </div>
+    </div>
+
+    <div id="sidebar">
+        <!-- Collapse Button -->
+        <div class="btn" id="btn-collapse" title="Hide Sidebar" style="height:32px; margin-bottom:10px;">
+            <svg viewBox="0 0 24 24">
+                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
+            </svg>
+        </div>
+
+        <!-- Back (4) -->
+        <div class="btn" id="btn-back" title="Back">
+            <svg viewBox="0 0 24 24">
+                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+            </svg>
+        </div>
+
+        <!-- Home (3) -->
+        <div class="btn" id="btn-home" title="Home">
+            <svg viewBox="0 0 24 24">
+                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+            </svg>
+        </div>
+
+        <!-- Recent (187) -->
+        <div class="btn" id="btn-recent" title="Recent">
+            <svg viewBox="0 0 24 24">
+                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
+            </svg>
+        </div>
+
+        <!-- Keyboard Toggle -->
+        <div class="btn" id="btn-keyboard" title="Open Keyboard">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z" />
+            </svg>
+        </div>
+
+        <div class="spacer"></div>
+
+        <!-- Volume Up (24) -->
+        <div class="btn" id="btn-vol-up" title="Vol+">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+            </svg>
+        </div>
+
+        <!-- Volume Down (25) -->
+        <div class="btn" id="btn-vol-down" title="Vol-">
+            <svg viewBox="0 0 24 24">
+                <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
+            </svg>
+        </div>
+    </div>
+
+    <script src="renderer.js"></script>
+</body>
+
+</html>
