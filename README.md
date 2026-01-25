@@ -1,38 +1,49 @@
-# Electron Scrcpy Mirror
+# Electron Scrcpy Mirror (高效能安卓投影鏡像)
 
-A high-performance Android mirroring and control application built with Electron and Scrcpy.
+這是一個基於 Electron 與 Scrcpy 核心的高效能安卓鏡像與控制應用程式。
 
-## Features
+## 🌟 核心特色
 
-- **Low-Latency Video**: Utilizes WebCodecs (`VideoDecoder`) for ultra-low latency H.264 streaming.
-- **High Quality Audio**: Real-time 48kHz PCM stereo audio leveraging protocol-aligned stream parsing.
-- **Magnetic Window Snap**: Automatically resizes the window to fit the device's aspect ratio perfectly, including sidebar toggle adjustments.
-- **Advanced IME Support**: A dedicated visible input bar for seamless Chinese/English typing using Mac's native IME (via Clipboard Paste injection for maximum stability).
-- **Navigation Controls**: On-screen buttons for Back, Home, and Recent apps.
-- **Physical Volume Simulation**: Dedicated buttons for Volume Up and Down.
-- **Collapsible Sidebar**: Hide the control bar to maximize screen real estate during gaming.
-- **HiDPI Ready**: Scaled UI elements and 1080p+ resolution support.
+- **極低延遲影像**：使用 WebCodecs (`VideoDecoder`) 進行硬體加速解碼，延遲低於 100ms。
+- **無損音訊傳輸**：即時 48kHz PCM 立體聲，音質清晰無爆音。
+- **磁吸式視窗比例**：自動根據手機螢幕比例調整視窗大小，完美貼合不留黑邊。
+- **進階輸入 (IME) 支援**：專為中文輸入設計的「可視化輸入列」，支援 Mac 原生注音/拼音選字，採剪貼簿注入技術確保高度穩定性。
+- **導航快捷鍵**：側邊欄內建返回、首頁、最近任務按鈕。
+- **實體音量模擬**：整合音量增加與減少按鈕。
+- **可收合側邊欄**：可隨時隱藏側邊框架，提供沉浸式的遊戲體驗。
+- **HiDPI 支援**：針對高解析度螢幕優化 UI 尺寸，支援 1080p+ 影像品質。
 
-## Prerequisites
+## ⚙️ 技術配置 (目前寫死於 `main.js`)
 
-- **ADB**: `brew install android-platform-tools`
-- **Scrcpy**: `brew install scrcpy` (Server JAR is accessed from the local installation).
+目前的版本為了開發方便，部分配置為硬編碼 (Hardcoded)，若需修改請至 `main.js`：
 
-## Quick Start
+- **設備序號 (Serial)**：預設連結 `emulator-5556`。
+- **Scrcpy Server 路徑**：指向 `/opt/homebrew/Cellar/scrcpy/...` (macOS 預設路徑)。
+- **通訊埠 (Ports)**：
+    - 影像串流 WebSocket: `8080`
+    - 音訊串流 WebSocket: `8081`
+    - ADB 轉發通訊埠: `27199` -> `localabstract:scrcpy`
 
-1. Ensure your Android device is connected via ADB.
-2. Install dependencies:
+## 🚀 快速開始
+
+1. 確保您的安卓設備已開啟開發者模式並透過 ADB 連結。
+2. 安裝必要的系統組件：
+   ```bash
+   brew install android-platform-tools
+   brew install scrcpy
+   ```
+3. 安裝專案依賴：
    ```bash
    npm install
    ```
-3. Start the application:
+4. 啟動應用程式：
    ```bash
    npm start
    ```
 
-## Controls
+## 🎮 操作說明
 
-- **Mouse**: Standard touch/click/drag behavior.
-- **Keyboard (IME)**: Click the keyboard icon to open the white input bar. Type and press Enter to send (Pastes content + triggers Enter on device).
-- **Sidebar**: Toggle with the chevron icon at the top.
-- **Volume**: Controls located at the bottom of the sidebar.
+- **滑鼠**：標準的點擊、長按與拖曳操作。
+- **中文打字**：點擊側邊欄的鍵盤圖示開啟「白色輸入列」，直接在該處打字（支援原生選字窗），按下 Enter 即可送出至手機。
+- **側邊欄**：點擊右上角的箭頭可收合；收合後點擊畫面右側懸浮標籤可展開。
+- **音量**：位於側邊欄最底部的按鍵。
