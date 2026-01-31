@@ -3,117 +3,258 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Select Device</title>
+    <title>Electron Mirror - Select Device</title>
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            background: #222;
-            color: #fff;
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
+            user-select: none;
         }
 
-        h2 {
-            margin-bottom: 20px;
-            color: #eee;
+        header {
+            padding: 24px 32px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            background: rgba(0, 0, 0, 0.2);
+            backdrop-filter: blur(10px);
         }
 
-        #device-list {
-            width: 100%;
-            max-width: 400px;
-            background: #333;
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-            max-height: 400px;
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 4px;
+        }
+
+        .subtitle {
+            font-size: 13px;
+            color: #888;
+        }
+
+        main {
+            flex: 1;
+            padding: 24px;
             overflow-y: auto;
         }
 
-        .device-item {
-            padding: 15px 20px;
-            border-bottom: 1px solid #444;
+        .section-title {
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #666;
+            margin-bottom: 16px;
+        }
+
+        .device-list {
             display: flex;
-            justify-content: space-between;
-            align-items: center;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .device-card {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 16px 20px;
             cursor: pointer;
-            transition: background 0.2s;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 16px;
         }
 
-        .device-item:last-child {
-            border-bottom: none;
+        .device-card:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateX(4px);
         }
 
-        .device-item:hover {
-            background: #444;
+        .device-card:active {
+            transform: scale(0.98);
+        }
+
+        .device-card.connecting {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        .device-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .device-icon svg {
+            width: 24px;
+            height: 24px;
+            fill: white;
         }
 
         .device-info {
-            display: flex;
-            flex-direction: column;
+            flex: 1;
+            min-width: 0;
         }
 
-        .device-model {
-            font-weight: 600;
-            font-size: 16px;
+        .device-name {
+            font-size: 15px;
+            font-weight: 500;
             color: #fff;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .device-serial {
             font-size: 12px;
-            color: #aaa;
-            margin-top: 4px;
+            color: #666;
+            font-family: 'SF Mono', Monaco, monospace;
         }
 
-        .btn-connect {
-            padding: 8px 16px;
-            background: #007AFF;
-            border: none;
-            border-radius: 6px;
-            color: white;
-            font-weight: 500;
-            cursor: pointer;
+        .device-arrow {
+            color: #444;
+            transition: color 0.2s;
         }
 
-        .btn-connect:hover {
-            background: #0062cc;
+        .device-card:hover .device-arrow {
+            color: #667eea;
         }
 
-        #loading {
-            color: #888;
-            margin-top: 20px;
-            font-size: 14px;
+        .empty-state {
+            text-align: center;
+            padding: 48px;
+            color: #666;
         }
 
-        #btn-refresh {
-            margin-top: 20px;
+        .empty-state svg {
+            width: 64px;
+            height: 64px;
+            fill: #333;
+            margin-bottom: 16px;
+        }
+
+        footer {
+            padding: 16px 24px;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .btn-refresh {
             background: transparent;
-            border: 1px solid #555;
-            color: #aaa;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #888;
             padding: 8px 16px;
-            border-radius: 6px;
+            border-radius: 8px;
+            font-size: 13px;
             cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
         }
 
-        #btn-refresh:hover {
-            border-color: #888;
+        .btn-refresh:hover {
+            background: rgba(255, 255, 255, 0.05);
             color: #fff;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-refresh svg {
+            width: 14px;
+            height: 14px;
+            fill: currentColor;
+        }
+
+        .version {
+            font-size: 11px;
+            color: #444;
+        }
+
+        /* Spinner */
+        .spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #667eea;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        /* Error Toast */
+        .toast {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%) translateY(100px);
+            background: #e74c3c;
+            color: white;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 14px;
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 100;
+        }
+
+        .toast.visible {
+            transform: translateX(-50%) translateY(0);
+            opacity: 1;
         }
     </style>
 </head>
 
 <body>
-    <h2>Select Android Device</h2>
-    <div id="device-list">
-        <!-- Devices will be injected here -->
-    </div>
-    <div id="loading">Scanning for devices...</div>
-    <button id="btn-refresh">Refresh List</button>
+    <header>
+        <h1>Electron Mirror</h1>
+        <div class="subtitle">High-Performance Android Mirror</div>
+    </header>
+
+    <main>
+        <div class="section-title">可用裝置</div>
+        <div class="device-list" id="deviceList">
+            <div class="empty-state">
+                <div class="spinner" style="margin: auto;"></div>
+                <p style="margin-top: 16px;">正在搜尋裝置...</p>
+            </div>
+        </div>
+    </main>
+
+    <footer>
+        <button class="btn-refresh" onclick="loadDevices()">
+            <svg viewBox="0 0 24 24">
+                <path
+                    d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+            </svg>
+            重新整理
+        </button>
+        <div class="version">v1.0.0</div>
+    </footer>
+
+    <div class="toast" id="toast"></div>
 
     <script src="launcher.js"></script>
 </body>

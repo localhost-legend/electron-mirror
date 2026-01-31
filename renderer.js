@@ -116,17 +116,60 @@ function handleVideoPayload(payload, pts) {
 
     if (isConfig) {
         vPendingConfig = payload;
+
+        // Conditional Reconfiguration Logic
+        // 1. MuMu sends a non-standard config (possibly raw Annex B or just incompatible).
+        //    For MuMu, we MUST NOT reconfigure. The initial 'avc1.42001E' works fine.
+        // 2. BlueStacks sends a standard AVCC config (starts with 0x01).
+        //    For BlueStacks, we MUST reconfigure because it's usually High Profile.
+
+        if (payload.length >= 4 && payload[0] === 0x01) { // Standard AVCC signature
+            try {
+                const profile = payload[1].toString(16).padStart(2, '0');
+                const compat = payload[2].toString(16).padStart(2, '0');
+                const level = payload[3].toString(16).padStart(2, '0');
+                const codec = `avc1.${profile}${compat}${level}`;
+
+                console.log(`[Video] Standard AVCC Detected. Reconfiguring decoder to: ${codec}`);
+
+                if (decoder.state !== 'closed') {
+                    decoder.configure({
+                        codec: codec,
+                        description: payload,
+                        optimizeForLatency: true
+                    });
+                }
+            } catch (e) {
+                console.error("[Video] AVCC Reconfig Error:", e);
+                // Fallback: If strict parsing fails, do nothing and hope initial config works.
+            }
+        } else {
+            // Non-standard header (MuMu). 
+            // Do NOT touch the decoder. Maintain the initial 'avc1.42001E' state.
+            console.log("[Video] Non-standard config (MuMu?). Skipping reconfiguration.");
+        }
     } else {
         let dataToFeed = payload;
         const naluType = payload[4] & 0x1f;
         const type = (isKeyFrame || naluType === 5) ? 'key' : 'delta';
+
         if (type === 'key' && vPendingConfig) {
+            // For some streams, we might need to prepend config.
+            // But for MuMu, it seems just feeding the keyframe is fine (or the config is implied).
+            // We'll trust the flow that worked before.
             dataToFeed = append(vPendingConfig, payload);
-            vPendingConfig = null;
+            // Keep vPendingConfig for future resets
         }
+
         try {
-            if (decoder.state === 'configured') result = decoder.decode(new EncodedVideoChunk({ type, timestamp: Number(rawPTS), data: dataToFeed }));
-        } catch (e) { }
+            if (decoder.state === 'configured') decoder.decode(new EncodedVideoChunk({
+                type,
+                timestamp: Number(rawPTS),
+                data: dataToFeed
+            }));
+        } catch (e) {
+            console.error("[Video] Decode error:", e);
+        }
     }
 }
 
@@ -189,31 +232,12 @@ async function start() {
     window.addEventListener('click', resumeAudio);
     window.addEventListener('keydown', resumeAudio);
 
+    // --- Global UI State & Selectors ---
     const imeBar = document.getElementById('ime-bar');
     const imeInput = document.getElementById('ime-input');
     const btnKeyboard = document.getElementById('btn-keyboard');
     const btnSend = document.getElementById('btn-send');
-
-    const sidebar = document.getElementById('sidebar');
-    const btnCollapse = document.getElementById('btn-collapse');
-    const btnExpand = document.getElementById('btn-expand');
-
     let isKeyboardOpen = false;
-    let isSidebarOpen = true;
-
-    // Sidebar Logic (Fix: Explicit/JS Display Toggle)
-    const toggleSidebar = (show) => {
-        isSidebarOpen = show;
-        if (show) {
-            sidebar.classList.remove('collapsed');
-            btnExpand.style.display = 'none'; // Hide Expand Button
-            ipcRenderer.send('resize-window', 48); // Reset sidebar width to standard
-        } else {
-            sidebar.classList.add('collapsed');
-            btnExpand.style.display = 'flex'; // Show Expand Button
-            ipcRenderer.send('resize-window', 0);
-        }
-    };
 
     // Debug Logs from Backend
     ipcRenderer.on('server-log', (event, msg) => {
@@ -230,21 +254,12 @@ async function start() {
         window.close();
     });
 
-    btnCollapse.onclick = () => toggleSidebar(false);
-    btnExpand.onclick = () => toggleSidebar(true);
-
     // Key Mapper Init
     const mapper = new KeyMapper(canvas, ws);
     mapper.onInject = (action, xP, yP) => {
-        // xP/yP are 0.0-1.0, convert to pixel coords for injectTouch logic?
-        // Actually renderer.injectTouch expects clientX/clientY.
-        // We need a lower level injectTouch that accepts 0-1.
         injectTouchNormalized(action, xP, yP);
     };
 
-    // Toggle Mapper Button (We need to add UI for it)
-    // For now let's reuse/hijack a button or add a new one? 
-    // Plan said add a new button. Let's assume index.html gets updated next.
     const btnMapper = document.getElementById('btn-mapper');
     if (btnMapper) {
         btnMapper.onclick = () => {
@@ -303,6 +318,14 @@ async function start() {
     document.getElementById('btn-vol-up').onclick = () => injectKeycode(24);
     document.getElementById('btn-vol-down').onclick = () => injectKeycode(25);
 
+    // Return to Overview
+    const btnReturnOverview = document.getElementById('btn-return-overview');
+    if (btnReturnOverview) {
+        btnReturnOverview.onclick = () => {
+            ipcRenderer.send('return-to-overview');
+        };
+    }
+
     // Websockets
     wsAudio = new WebSocket('ws://localhost:8081');
     wsAudio.binaryType = 'arraybuffer';
@@ -333,7 +356,7 @@ async function start() {
             status.textContent = `Receiving Video... (${videoBuffer.length + data.length} bytes buffered)`;
         }
 
-        // Restore Protocol Parsing
+        // Protocol Parsing
         videoBuffer = append(videoBuffer, data);
         parseVideo();
     };
@@ -466,5 +489,75 @@ function injectClipboardPaste(text) {
 
     ws.send(buffer);
 }
+
+// --- Unified Sidebar Logic ---
+const sidebar = document.getElementById('sidebar');
+const sidebarTrigger = document.getElementById('sidebar-trigger');
+const btnPin = document.getElementById('btn-pin');
+
+const SidebarMode = {
+    PINNED: 'pinned',     // Always visible, pushes content
+    FLOATING: 'floating'  // Auto-hide, overlays content on hover
+};
+
+let currentSidebarMode = SidebarMode.PINNED;
+let isFullscreen = false;
+
+function setSidebarMode(mode) {
+    currentSidebarMode = mode;
+
+    // Clear state classes
+    sidebar.classList.remove('pinned', 'floating', 'revealed');
+
+    if (mode === SidebarMode.PINNED) {
+        sidebar.classList.add('pinned');
+        if (btnPin) {
+            btnPin.classList.add('active');
+            btnPin.title = "切換為自動隱藏 (懸浮)";
+        }
+    } else {
+        sidebar.classList.add('floating');
+        if (btnPin) {
+            btnPin.classList.remove('active');
+            btnPin.title = "切換為常駐顯示 (釘選)";
+        }
+    }
+}
+
+// Hover Detection (Trigger Reveal)
+if (sidebarTrigger) {
+    sidebarTrigger.addEventListener('mouseenter', () => {
+        if (currentSidebarMode === SidebarMode.FLOATING) {
+            sidebar.classList.add('revealed');
+        }
+    });
+}
+
+// Hide when leaving sidebar area
+if (sidebar) {
+    sidebar.addEventListener('mouseleave', () => {
+        if (currentSidebarMode === SidebarMode.FLOATING) {
+            sidebar.classList.remove('revealed');
+        }
+    });
+}
+
+// Pin/Unpin Toggle (Unified Control)
+if (btnPin) {
+    btnPin.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const nextMode = (currentSidebarMode === SidebarMode.PINNED) ? SidebarMode.FLOATING : SidebarMode.PINNED;
+        setSidebarMode(nextMode);
+    });
+}
+
+// Fullscreen adaptation (Optional: could force floating in FS, but let's trust user preference)
+ipcRenderer.on('fullscreen-change', (event, full) => {
+    isFullscreen = full;
+    // UI can adapt here if needed, but current unified logic handles both window/FS
+});
+
+// Initialize
+setSidebarMode(SidebarMode.PINNED);
 
 start();

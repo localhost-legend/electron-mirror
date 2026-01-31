@@ -3,130 +3,215 @@
 
 <head>
     <meta charset="UTF-8">
-    <title>Electron Scrcpy Mirror</title>
+    <title>Tango Native</title>
     <style>
-        body {
+        * {
+            box-sizing: border-box;
             margin: 0;
-            background: #000;
+            padding: 0;
+        }
+
+        body {
+            background: #0a0a0f;
             overflow: hidden;
             height: 100vh;
             width: 100vw;
             display: flex;
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
             user-select: none;
         }
 
         #app {
-            flex: 1;
-            display: flex;
             background: #000;
             position: relative;
-            height: 100%;
+            height: 100vh;
+            width: 100vw;
             overflow: hidden;
-            flex-direction: column;
+        }
+
+        #video-container {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
         }
 
         canvas {
-            flex: 1;
             width: 100%;
+            height: 100%;
             object-fit: contain;
             display: block;
         }
 
-        /* Sidebar 48px */
+        /* --- Unified Sidebar Layout --- */
         #sidebar {
-            width: 48px;
-            background: #1a1a1a;
+            width: 56px;
+            background: linear-gradient(180deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 15, 0.98) 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding-top: 10px;
-            /* Reduced padding for toggle */
-            border-left: 1px solid #333;
-            z-index: 10;
-            transition: width 0.2s cubic-bezier(0.4, 0.0, 0.2, 1);
+            padding: 16px 0;
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            z-index: 100;
+            /* Sidebar always on top */
+            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                transform 0.3s ease-out,
+                opacity 0.2s ease;
             overflow: hidden;
-            /* Hide contents when collapsed */
+            flex-shrink: 0;
         }
 
-        #sidebar.collapsed {
-            width: 0;
-            border-left: none;
+        /* 1. PINNED MODE: Fixed on right, overlays WITHOUT shifting center */
+        #sidebar.pinned {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            transform: translateX(0) !important;
+            opacity: 1 !important;
+            width: 56px;
+            background: rgba(15, 15, 25, 0.95);
+        }
+
+        /* 2. FLOATING (AUTO-HIDE) MODE: Overlays content, hidden by default */
+        #sidebar.floating {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            transform: translateX(100%);
+            /* Hidden off-screen to the right */
+            opacity: 0;
+            background: rgba(15, 15, 25, 0.9);
+            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
+            pointer-events: none;
+            /* Can't click/interact when hidden */
+        }
+
+        /* Revealed state for floating mode on hover */
+        #sidebar.floating.revealed {
+            transform: translateX(0);
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        /* Transparent Trigger Zone for Hover Detection */
+        #sidebar-trigger {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 15px;
+            /* Narrow area near edge */
+            height: 100%;
+            z-index: 90;
+            background: transparent;
         }
 
         .btn {
-            width: 40px;
-            height: 40px;
-            margin-bottom: 20px;
+            width: 44px;
+            height: 44px;
+            margin-bottom: 8px;
             cursor: pointer;
-            border-radius: 10px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
             transition: all 0.2s ease;
-            color: #bbb;
-            background: rgba(255, 255, 255, 0.05);
+            color: rgba(255, 255, 255, 0.5);
+            background: transparent;
             flex-shrink: 0;
-            /* Prevent squishing */
+            border: none;
+            position: relative;
         }
 
         .btn:hover {
-            background: rgba(255, 255, 255, 0.15);
-            color: #fff;
+            background: rgba(255, 255, 255, 0.08);
+            color: rgba(255, 255, 255, 0.9);
             transform: scale(1.05);
         }
 
         .btn:active {
-            background: rgba(255, 255, 255, 0.1);
             transform: scale(0.95);
         }
 
         .btn.active {
-            color: #4CAF50;
-            background: rgba(76, 175, 80, 0.2);
-            box-shadow: 0 0 10px rgba(76, 175, 80, 0.4);
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.15);
         }
 
-        svg {
-            width: 24px;
-            height: 24px;
+        /* Tooltip behavior */
+        .btn[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            right: 60px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            padding: 5px 10px;
+            border-radius: 4px;
+            font-size: 12px;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .btn svg {
+            width: 22px;
+            height: 22px;
             fill: currentColor;
-            stroke-width: 0.5px;
+        }
+
+        .divider {
+            width: 28px;
+            height: 1px;
+            background: rgba(255, 255, 255, 0.1);
+            margin: 8px 0;
+            flex-shrink: 0;
         }
 
         .spacer {
             flex: 1;
         }
 
-        #status {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            color: #0f0;
-            font-family: monospace;
-            font-size: 16px;
-            background: rgba(0, 0, 0, 0.6);
-            padding: 8px 12px;
-            border-radius: 6px;
-            pointer-events: none;
-            z-index: 5;
-            backdrop-filter: blur(4px);
+        /* Pin/Unpin Visual feedback */
+        #btn-pin.active {
+            color: #667eea;
+            background: rgba(102, 126, 234, 0.15);
         }
 
-        /* Input Bar */
+        /* Status Overlay */
+        #status {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            color: #667eea;
+            font-family: 'SF Mono', Monaco, monospace;
+            font-size: 13px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 16px;
+            border-radius: 8px;
+            pointer-events: none;
+            z-index: 5;
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(102, 126, 234, 0.2);
+        }
+
+        /* IME Input Bar */
         #ime-bar {
             position: absolute;
             bottom: 0;
             left: 0;
             right: 0;
             height: 72px;
-            background: #ffffff;
+            background: rgba(255, 255, 255, 0.98);
             display: flex;
             align-items: center;
             padding: 0 24px;
             transform: translateY(100%);
-            transition: transform 0.2s cubic-bezier(0.2, 0.0, 0.2, 1);
-            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.15);
+            transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.2);
             z-index: 20;
         }
 
@@ -136,61 +221,38 @@
 
         #ime-input {
             flex: 1;
-            background: #f2f2f7;
+            background: #f0f0f5;
             border: none;
-            color: #000;
+            color: #1a1a1a;
             padding: 14px 18px;
-            border-radius: 10px;
-            font-size: 18px;
+            border-radius: 12px;
+            font-size: 16px;
             outline: none;
-            margin-right: 16px;
-            box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+            margin-right: 12px;
         }
 
         #ime-input::placeholder {
-            color: #8e8e93;
+            color: #999;
         }
 
         #btn-send {
-            padding: 12px 24px;
-            background: #007AFF;
+            padding: 14px 24px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
             color: white;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             cursor: pointer;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
-            transition: background 0.2s;
+            transition: all 0.2s;
         }
 
         #btn-send:hover {
-            background: #0062cc;
+            transform: scale(1.02);
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
         }
 
-        /* Floating Toggle Button (When Collapsed) */
-        #btn-expand {
-            position: absolute;
-            right: 0;
-            top: 50%;
-            transform: translateY(-50%);
-            width: 24px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 12px 0 0 12px;
-            cursor: pointer;
-            display: none;
-            /* Hidden by default */
-            align-items: center;
-            justify-content: center;
-            color: #ccc;
-            z-index: 9;
-            transition: background 0.2s;
-        }
 
-        #btn-expand:hover {
-            background: rgba(255, 255, 255, 0.3);
-            color: #fff;
-        }
 
         /* Loading Overlay */
         #loading-overlay {
@@ -199,162 +261,174 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background: #111;
+            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
             z-index: 100;
-            transition: opacity 0.5s;
+            transition: opacity 0.5s ease;
         }
 
         .loader {
             width: 48px;
             height: 48px;
-            border: 4px solid #333;
-            border-top: 4px solid #007AFF;
+            border: 3px solid rgba(102, 126, 234, 0.2);
+            border-top: 3px solid #667eea;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
+            animation: spin 0.8s linear infinite;
         }
 
         @keyframes spin {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
+            to {
                 transform: rotate(360deg);
             }
         }
 
         .tip {
-            margin-top: 20px;
-            color: #888;
+            margin-top: 24px;
+            color: rgba(255, 255, 255, 0.5);
             font-size: 14px;
-            max-width: 300px;
             text-align: center;
-            line-height: 1.5;
+            line-height: 1.6;
         }
 
         /* Key Mapper Widgets */
         .key-widget {
             position: absolute;
-            background: rgba(255, 255, 255, 0.2);
-            border: 2px solid #fff;
+            background: rgba(102, 126, 234, 0.3);
+            border: 2px solid #667eea;
             border-radius: 50%;
-            width: 40px;
-            height: 40px;
+            width: 44px;
+            height: 44px;
             display: flex;
             align-items: center;
             justify-content: center;
             color: #fff;
-            font-weight: bold;
-            font-size: 16px;
+            font-weight: 600;
+            font-size: 14px;
             transform: translate(-50%, -50%);
-            box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.4);
             cursor: move;
             user-select: none;
             text-transform: uppercase;
+            backdrop-filter: blur(4px);
         }
 
-        /* Sidebar collapsed btn */
-        #sidebar.collapsed~#btn-expand {
-
-            display: flex;
+        /* Tooltips */
+        .btn[title]:hover::after {
+            content: attr(title);
+            position: absolute;
+            right: 64px;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            white-space: nowrap;
+            pointer-events: none;
         }
     </style>
 </head>
 
 <body>
     <div id="app">
-        <!-- Loading Overlay -->
-        <div id="loading-overlay">
-            <div class="loader"></div>
-            <div class="tip" id="daily-tip">正在連線至裝置...<br>Tip: 您可以使用 .env 檔案來管理設備序號。</div>
+        <!-- Sidebar Trigger Zone (for hover detection) -->
+        <div id="sidebar-trigger"></div>
+
+        <!-- Video Container -->
+        <div id="video-container">
+            <canvas id="videoCanvas"></canvas>
+
+            <!-- Loading Overlay (Moved inside to cover video area) -->
+            <div id="loading-overlay">
+                <div class="loader"></div>
+                <div class="tip">正在連接裝置...<br>請在手機上允許 USB 偵錯授權</div>
+                <div id="status" style="margin-top:10px; color:#ff4444; display:none;"></div>
+            </div>
+
+            <!-- IME Input -->
+            <div id="ime-container"
+                style="display:none; position:absolute; bottom:30px; left:50%; transform:translateX(-50%); background:rgba(20,20,30,0.9); padding:10px; border-radius:12px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); z-index:50;">
+                <input type="text" id="ime-input" placeholder="輸入文字..."
+                    style="background:#f0f0f5; border:none; color:#1a1a1a; padding:10px 15px; border-radius:8px; font-size:16px; outline:none; margin-right:10px; width:250px;">
+                <button id="btn-send"
+                    style="padding:10px 20px; background:#667eea; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">發送</button>
+            </div>
         </div>
 
-        <canvas id="videoCanvas"></canvas>
-        <div id="status">Waiting for connection...</div>
+        <div id="sidebar">
+            <button class="btn" id="btn-pin" title="切換側邊欄模式">
+                <svg viewBox="0 0 24 24">
+                    <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
+                </svg>
+            </button>
+            <div class="divider"></div>
+            <button class="btn" id="btn-return-overview" title="檢視資訊"
+                style="background: rgba(102,126,234,0.2); color: #667eea;">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                </svg>
+            </button>
+            <div class="divider"></div>
+            <!-- Navigation -->
+            <button class="btn" id="btn-back" title="返回">
+                <svg viewBox="0 0 24 24">
+                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
+                </svg>
+            </button>
 
-        <div id="ime-bar">
-            <input type="text" id="ime-input" placeholder="在此輸入文字..." autocomplete="off">
-            <button id="btn-send">發送</button>
+            <button class="btn" id="btn-home" title="主畫面">
+                <svg viewBox="0 0 24 24">
+                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                </svg>
+            </button>
+
+            <button class="btn" id="btn-recent" title="最近應用">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
+                </svg>
+            </button>
+
+            <div class="divider"></div>
+
+            <!-- Keyboard -->
+            <button class="btn" id="btn-keyboard" title="鍵盤">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z" />
+                </svg>
+            </button>
+
+            <div class="spacer"></div>
+
+            <!-- Key Mapper -->
+            <button class="btn" id="btn-mapper" title="按鍵映射">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
+                </svg>
+            </button>
+
+            <div class="divider"></div>
+
+            <!-- Volume -->
+            <button class="btn" id="btn-vol-up" title="音量+">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
+                </svg>
+            </button>
+
+            <button class="btn" id="btn-vol-down" title="音量-">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
+                </svg>
+            </button>
         </div>
 
-        <!-- Floating Expand Button -->
-        <div id="btn-expand" title="Open Sidebar">
-            <svg viewBox="0 0 24 24" style="width:16px;height:16px;">
-                <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" />
-            </svg>
-        </div>
-    </div>
-
-    <div id="sidebar">
-        <!-- Collapse Button -->
-        <div class="btn" id="btn-collapse" title="Hide Sidebar" style="height:32px; margin-bottom:10px;">
-            <svg viewBox="0 0 24 24">
-                <path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" />
-            </svg>
-        </div>
-
-        <!-- Back (4) -->
-        <div class="btn" id="btn-back" title="Back">
-            <svg viewBox="0 0 24 24">
-                <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-            </svg>
-        </div>
-
-        <!-- Home (3) -->
-        <div class="btn" id="btn-home" title="Home">
-            <svg viewBox="0 0 24 24">
-                <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-            </svg>
-        </div>
-
-        <!-- Recent (187) -->
-        <div class="btn" id="btn-recent" title="Recent">
-            <svg viewBox="0 0 24 24">
-                <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
-            </svg>
-        </div>
-
-        <!-- Keyboard Toggle -->
-        <div class="btn" id="btn-keyboard" title="Open Keyboard">
-            <svg viewBox="0 0 24 24">
-                <path
-                    d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z" />
-            </svg>
-        </div>
-
-        <div class="spacer"></div>
-
-
-
-        <!-- Key Mapper Toggle (Gamepad) -->
-        <div class="btn" id="btn-mapper" title="Key Mapping">
-            <svg viewBox="0 0 24 24">
-                <path
-                    d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-            </svg>
-        </div>
-
-        <!-- Volume Up (24) -->
-        <div class="btn" id="btn-vol-up" title="Vol+">
-            <svg viewBox="0 0 24 24">
-                <path
-                    d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-            </svg>
-        </div>
-
-        <!-- Volume Down (25) -->
-        <div class="btn" id="btn-vol-down" title="Vol-">
-            <svg viewBox="0 0 24 24">
-                <path d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
-            </svg>
-        </div>
-    </div>
-
-    <script src="renderer.js"></script>
+        <script src="renderer.js"></script>
 </body>
 
 </html>
