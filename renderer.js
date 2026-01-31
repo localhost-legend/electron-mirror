@@ -1,6 +1,7 @@
 const canvas = document.getElementById('videoCanvas');
 const ctx = canvas.getContext('2d');
 const { ipcRenderer } = require('electron');
+const KeyMapper = require('./keymapper');
 
 let decoder = null;
 let ws = null;
@@ -47,7 +48,17 @@ async function initDecoder() {
     decoder = new VideoDecoder({
         output: (frame) => {
             const status = document.getElementById('status');
-            if (status) status.style.display = 'none';
+            if (status) {
+                status.textContent = "Rendering...";
+                setTimeout(() => status.style.display = 'none', 100);
+            }
+
+            // Hide Loading Overlay
+            const loader = document.getElementById('loading-overlay');
+            if (loader) {
+                loader.style.opacity = '0';
+                setTimeout(() => loader.style.display = 'none', 500);
+            }
 
             if (firstFrame || canvas.width !== frame.displayWidth || canvas.height !== frame.displayHeight) {
                 canvas.width = frame.displayWidth;
@@ -58,7 +69,15 @@ async function initDecoder() {
             ctx.drawImage(frame, 0, 0);
             frame.close();
         },
-        error: (e) => console.error(e)
+        error: (e) => {
+            console.error("Decoder Error:", e);
+            const status = document.getElementById('status');
+            if (status) {
+                status.style.display = 'block';
+                status.style.color = 'red';
+                status.textContent = `Decoder Error: ${e.message}`;
+            }
+        }
     });
     try { decoder.configure({ codec: 'avc1.42001E', optimizeForLatency: true }); } catch (e) { }
 }
@@ -97,17 +116,60 @@ function handleVideoPayload(payload, pts) {
 
     if (isConfig) {
         vPendingConfig = payload;
+
+        // Conditional Reconfiguration Logic
+        // 1. MuMu sends a non-standard config (possibly raw Annex B or just incompatible).
+        //    For MuMu, we MUST NOT reconfigure. The initial 'avc1.42001E' works fine.
+        // 2. BlueStacks sends a standard AVCC config (starts with 0x01).
+        //    For BlueStacks, we MUST reconfigure because it's usually High Profile.
+
+        if (payload.length >= 4 && payload[0] === 0x01) { // Standard AVCC signature
+            try {
+                const profile = payload[1].toString(16).padStart(2, '0');
+                const compat = payload[2].toString(16).padStart(2, '0');
+                const level = payload[3].toString(16).padStart(2, '0');
+                const codec = `avc1.${profile}${compat}${level}`;
+
+                console.log(`[Video] Standard AVCC Detected. Reconfiguring decoder to: ${codec}`);
+
+                if (decoder.state !== 'closed') {
+                    decoder.configure({
+                        codec: codec,
+                        description: payload,
+                        optimizeForLatency: true
+                    });
+                }
+            } catch (e) {
+                console.error("[Video] AVCC Reconfig Error:", e);
+                // Fallback: If strict parsing fails, do nothing and hope initial config works.
+            }
+        } else {
+            // Non-standard header (MuMu). 
+            // Do NOT touch the decoder. Maintain the initial 'avc1.42001E' state.
+            console.log("[Video] Non-standard config (MuMu?). Skipping reconfiguration.");
+        }
     } else {
         let dataToFeed = payload;
         const naluType = payload[4] & 0x1f;
         const type = (isKeyFrame || naluType === 5) ? 'key' : 'delta';
+
         if (type === 'key' && vPendingConfig) {
+            // For some streams, we might need to prepend config.
+            // But for MuMu, it seems just feeding the keyframe is fine (or the config is implied).
+            // We'll trust the flow that worked before.
             dataToFeed = append(vPendingConfig, payload);
-            vPendingConfig = null;
+            // Keep vPendingConfig for future resets
         }
+
         try {
-            if (decoder.state === 'configured') result = decoder.decode(new EncodedVideoChunk({ type, timestamp: Number(rawPTS), data: dataToFeed }));
-        } catch (e) { }
+            if (decoder.state === 'configured') decoder.decode(new EncodedVideoChunk({
+                type,
+                timestamp: Number(rawPTS),
+                data: dataToFeed
+            }));
+        } catch (e) {
+            console.error("[Video] Decode error:", e);
+        }
     }
 }
 
@@ -170,34 +232,50 @@ async function start() {
     window.addEventListener('click', resumeAudio);
     window.addEventListener('keydown', resumeAudio);
 
+    // --- Global UI State & Selectors ---
     const imeBar = document.getElementById('ime-bar');
     const imeInput = document.getElementById('ime-input');
     const btnKeyboard = document.getElementById('btn-keyboard');
     const btnSend = document.getElementById('btn-send');
-
-    const sidebar = document.getElementById('sidebar');
-    const btnCollapse = document.getElementById('btn-collapse');
-    const btnExpand = document.getElementById('btn-expand');
-
     let isKeyboardOpen = false;
-    let isSidebarOpen = true;
 
-    // Sidebar Logic (Fix: Explicit/JS Display Toggle)
-    const toggleSidebar = (show) => {
-        isSidebarOpen = show;
-        if (show) {
-            sidebar.classList.remove('collapsed');
-            btnExpand.style.display = 'none'; // Hide Expand Button
-            ipcRenderer.send('resize-window', 48);
-        } else {
-            sidebar.classList.add('collapsed');
-            btnExpand.style.display = 'flex'; // Show Expand Button
-            ipcRenderer.send('resize-window', 0);
+    // Debug Logs from Backend
+    ipcRenderer.on('server-log', (event, msg) => {
+        console.log("[Backend]", msg);
+        const status = document.getElementById('status');
+        if (status && status.style.display !== 'none') {
+            status.innerHTML += `<br/><span style="font-size:12px; color:#aaa">${msg}</span>`;
         }
+    });
+
+    // Connection Failsafe (from Launcher)
+    ipcRenderer.on('connection-failed', (event, err) => {
+        alert("Connection Failed: " + err);
+        window.close();
+    });
+
+    // Key Mapper Init
+    const mapper = new KeyMapper(canvas, ws);
+    mapper.onInject = (action, xP, yP) => {
+        injectTouchNormalized(action, xP, yP);
     };
 
-    btnCollapse.onclick = () => toggleSidebar(false);
-    btnExpand.onclick = () => toggleSidebar(true);
+    const btnMapper = document.getElementById('btn-mapper');
+    if (btnMapper) {
+        btnMapper.onclick = () => {
+            mapper.toggleEditMode();
+            btnMapper.classList.toggle('active');
+        };
+    }
+
+    // Global Key Listener
+    window.addEventListener('keydown', (e) => {
+        if (!isKeyboardOpen) mapper.handleKeyDown(e);
+        resumeAudio();
+    });
+    window.addEventListener('keyup', (e) => {
+        if (!isKeyboardOpen) mapper.handleKeyUp(e);
+    });
 
     // Keyboard Logic
     const toggleKeyboard = () => {
@@ -240,6 +318,14 @@ async function start() {
     document.getElementById('btn-vol-up').onclick = () => injectKeycode(24);
     document.getElementById('btn-vol-down').onclick = () => injectKeycode(25);
 
+    // Return to Overview
+    const btnReturnOverview = document.getElementById('btn-return-overview');
+    if (btnReturnOverview) {
+        btnReturnOverview.onclick = () => {
+            ipcRenderer.send('return-to-overview');
+        };
+    }
+
     // Websockets
     wsAudio = new WebSocket('ws://localhost:8081');
     wsAudio.binaryType = 'arraybuffer';
@@ -255,47 +341,121 @@ async function start() {
     };
 
     ws = new WebSocket('ws://localhost:8080');
-    ws.binaryType = 'arraybuffer';
-    ws.onmessage = (event) => {
-        videoBuffer = append(videoBuffer, new Uint8Array(event.data));
+    ws.onopen = () => {
+        console.log("Connected to WS");
+        const status = document.getElementById('status');
+        if (status) status.textContent = "Server Connected. Waiting for Video Stream...";
+    };
+
+    ws.onmessage = async (event) => {
+        const data = new Uint8Array(await event.data.arrayBuffer());
+
+        // Update Status only if still visible
+        const status = document.getElementById('status');
+        if (status && status.style.display !== 'none') {
+            status.textContent = `Receiving Video... (${videoBuffer.length + data.length} bytes buffered)`;
+        }
+
+        // Protocol Parsing
+        videoBuffer = append(videoBuffer, data);
         parseVideo();
+    };
+
+    // Proper Mouse Events with Cleanup
+    const onMouseMove = (ev) => injectTouch(2, ev.clientX, ev.clientY);
+    const onMouseUp = (ev) => {
+        injectTouch(1, ev.clientX, ev.clientY);
+        canvas.removeEventListener('mousemove', onMouseMove);
+        canvas.removeEventListener('mouseup', onMouseUp);
+        canvas.removeEventListener('mouseleave', onMouseUp);
     };
 
     canvas.addEventListener('mousedown', (e) => {
         injectTouch(0, e.clientX, e.clientY);
-        canvas.addEventListener('mousemove', (ev) => injectTouch(2, ev.clientX, ev.clientY));
+        canvas.addEventListener('mousemove', onMouseMove);
+        canvas.addEventListener('mouseup', onMouseUp);
+        canvas.addEventListener('mouseleave', onMouseUp);
     });
-    canvas.addEventListener('mouseup', (e) => {
-        injectTouch(1, e.clientX, e.clientY);
-    });
+
+    // Loading Failsafe: Remove overlay after 10s if video never starts
+    setTimeout(() => {
+        const loader = document.getElementById('loading-overlay');
+        if (loader && loader.style.opacity !== '0') {
+            loader.style.opacity = '0';
+            setTimeout(() => loader.style.display = 'none', 500);
+            console.warn("Loading overlay force-hidden after timeout");
+        }
+    }, 10000);
+}
+
+function injectTouchNormalized(action, xP, yP, pointerId = -1n) {
+    if (!ws || ws.readyState !== WebSocket.OPEN || canvas.width === 0) return;
+
+    // Scrcpy Protocol:
+    // type(1) | action(1) | pointerId(8) | x(4) | y(4) | w(2) | h(2) | pressure(2) | buttons(4)
+
+    const w = canvas.width;
+    const h = canvas.height;
+
+    const buffer = new ArrayBuffer(32);
+    const view = new DataView(buffer);
+    view.setUint8(0, 2); // Type: INJECT_TOUCH_EVENT
+    view.setUint8(1, action);
+    view.setBigUint64(2, BigInt(pointerId)); // Support multi-touch
+    view.setUint32(10, Math.round(xP * w), false);
+    view.setUint32(14, Math.round(yP * h), false);
+    view.setUint16(18, w, false);
+    view.setUint16(20, h, false);
+    view.setUint16(22, 0xffff, false); // Pressure
+
+    let ab = 0, b = 0; // Buttons (Primary)
+    if (action === 0 || action === 2) { ab = 1; b = 1; } // Down or Move
+    view.setUint32(24, ab, false); view.setUint32(28, b, false);
+    ws.send(buffer);
 }
 
 function injectTouch(action, clientX, clientY) {
-    if (!ws || ws.readyState !== WebSocket.OPEN || !decoder || canvas.width === 0) return;
+    if (!ws || ws.readyState !== WebSocket.OPEN || canvas.width === 0) return;
 
     const rect = canvas.getBoundingClientRect();
-    const cRatio = rect.width / rect.height;
-    const vRatio = canvas.width / canvas.height;
-    let rw, rh, ox, oy;
-    if (cRatio > vRatio) { rh = rect.height; rw = rh * vRatio; ox = (rect.width - rw) / 2; oy = 0; }
-    else { rw = rect.width; rh = rw / vRatio; ox = 0; oy = (rect.height - rh) / 2; }
-    if (rw === 0 || rh === 0) return;
+    const videoAspect = canvas.width / canvas.height;
+    const rectAspect = rect.width / rect.height;
 
-    const x = (clientX - rect.left - ox) * (canvas.width / rw);
-    const y = (clientY - rect.top - oy) * (canvas.height / rh);
+    let renderW, renderH, offsetX, offsetY;
+
+    if (rectAspect > videoAspect) {
+        // Pillarbox (black bars on sides)
+        renderH = rect.height;
+        renderW = renderH * videoAspect;
+        offsetX = (rect.width - renderW) / 2;
+        offsetY = 0;
+    } else {
+        // Letterbox (black bars on top/bottom)
+        renderW = rect.width;
+        renderH = renderW / videoAspect;
+        offsetX = 0;
+        offsetY = (rect.height - renderH) / 2;
+    }
+
+    // Map client coordinates to video coordinates
+    const x = (clientX - rect.left - offsetX) * (canvas.width / renderW);
+    const y = (clientY - rect.top - offsetY) * (canvas.height / renderH);
+
+    // Ignore clicks outside the video area
+    if (x < 0 || x > canvas.width || y < 0 || y > canvas.height) return;
 
     const buffer = new ArrayBuffer(32);
     const view = new DataView(buffer);
     view.setUint8(0, 2); view.setUint8(1, action);
-    view.setBigUint64(2, -1n);
+    view.setBigUint64(2, -1n); // PointerID -1 for mouse
     view.setUint32(10, Math.round(x), false); view.setUint32(14, Math.round(y), false);
     view.setUint16(18, canvas.width, false); view.setUint16(20, canvas.height, false);
     view.setUint16(22, 0xffff, false);
 
     let ab = 0, b = 0;
-    if (action === 0) { ab = 1; b = 1; }
-    else if (action === 1) { ab = 1; b = 0; }
-    else if (action === 2) { ab = 0; b = 1; }
+    if (action === 0) { ab = 1; b = 1; } // Down
+    else if (action === 1) { ab = 1; b = 0; } // Up
+    else if (action === 2) { ab = 0; b = 1; } // Move
     view.setUint32(24, ab, false); view.setUint32(28, b, false);
     ws.send(buffer);
 }
@@ -329,5 +489,75 @@ function injectClipboardPaste(text) {
 
     ws.send(buffer);
 }
+
+// --- Unified Sidebar Logic ---
+const sidebar = document.getElementById('sidebar');
+const sidebarTrigger = document.getElementById('sidebar-trigger');
+const btnPin = document.getElementById('btn-pin');
+
+const SidebarMode = {
+    PINNED: 'pinned',     // Always visible, pushes content
+    FLOATING: 'floating'  // Auto-hide, overlays content on hover
+};
+
+let currentSidebarMode = SidebarMode.PINNED;
+let isFullscreen = false;
+
+function setSidebarMode(mode) {
+    currentSidebarMode = mode;
+
+    // Clear state classes
+    sidebar.classList.remove('pinned', 'floating', 'revealed');
+
+    if (mode === SidebarMode.PINNED) {
+        sidebar.classList.add('pinned');
+        if (btnPin) {
+            btnPin.classList.add('active');
+            btnPin.title = "切換為自動隱藏 (懸浮)";
+        }
+    } else {
+        sidebar.classList.add('floating');
+        if (btnPin) {
+            btnPin.classList.remove('active');
+            btnPin.title = "切換為常駐顯示 (釘選)";
+        }
+    }
+}
+
+// Hover Detection (Trigger Reveal)
+if (sidebarTrigger) {
+    sidebarTrigger.addEventListener('mouseenter', () => {
+        if (currentSidebarMode === SidebarMode.FLOATING) {
+            sidebar.classList.add('revealed');
+        }
+    });
+}
+
+// Hide when leaving sidebar area
+if (sidebar) {
+    sidebar.addEventListener('mouseleave', () => {
+        if (currentSidebarMode === SidebarMode.FLOATING) {
+            sidebar.classList.remove('revealed');
+        }
+    });
+}
+
+// Pin/Unpin Toggle (Unified Control)
+if (btnPin) {
+    btnPin.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const nextMode = (currentSidebarMode === SidebarMode.PINNED) ? SidebarMode.FLOATING : SidebarMode.PINNED;
+        setSidebarMode(nextMode);
+    });
+}
+
+// Fullscreen adaptation (Optional: could force floating in FS, but let's trust user preference)
+ipcRenderer.on('fullscreen-change', (event, full) => {
+    isFullscreen = full;
+    // UI can adapt here if needed, but current unified logic handles both window/FS
+});
+
+// Initialize
+setSidebarMode(SidebarMode.PINNED);
 
 start();
