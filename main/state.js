@@ -1,0 +1,18 @@
+export default {
+    mainWindow: null,
+    launcherWindow: null,
+    overviewWindow: null,
+    selectedSerial: null,
+    selectedAlias: null,
+    selectedModel: null,
+    currentVideoRatio: 9 / 16,
+    currentSidebarWidth: 48,
+    notificationCache: [],
+    notificationWatcher: null,
+    isScrcpyStarted: false,
+    scrcpyProc: null,
+    videoSocket: null,
+    audioSocket: null,
+    controlSocket: null,
+    streamHistory: [],
+};

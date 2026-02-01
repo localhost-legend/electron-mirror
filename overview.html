@@ -975,7 +975,7 @@
     <div class="toast" id="toast"></div>
 
     <script>
-        const { ipcRenderer, clipboard } = require('electron');
+        const { ipcRenderer, shell } = require('electron');
 
         let currentPath = '/sdcard';
         let currentAppFilter = 'user';
@@ -1022,7 +1022,8 @@
                 return;
             }
 
-            document.getElementById('deviceName').textContent = `${info.manufacturer} ${info.model}`;
+            const displayName = info.alias || `${info.manufacturer} ${info.model}`;
+            document.getElementById('deviceName').textContent = displayName;
             document.getElementById('deviceSerial').textContent = info.serial;
 
             const batteryClass = info.isCharging ? 'charging' : (info.battery < 20 ? 'low' : '');

@@ -1,4 +1,4 @@
-const { ipcRenderer } = require('electron');
+import { ipcRenderer } from 'electron';
 
 class KeyMapper {
     constructor(canvas, ws) {
@@ -462,4 +462,4 @@ class KeyMapper {
     }
 }
 
-module.exports = KeyMapper;
+export default KeyMapper;

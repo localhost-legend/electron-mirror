@@ -1,7 +1,8 @@
+const { ipcRenderer } = window.require('electron');
+const KeyMapperModule = window.require('./keymapper.js');
+
 const canvas = document.getElementById('videoCanvas');
 const ctx = canvas.getContext('2d');
-const { ipcRenderer } = require('electron');
-const KeyMapper = require('./keymapper');
 
 let decoder = null;
 let ws = null;
@@ -255,6 +256,7 @@ async function start() {
     });
 
     // Key Mapper Init
+    const KeyMapper = KeyMapperModule?.default || KeyMapperModule?.KeyMapper || KeyMapperModule;
     const mapper = new KeyMapper(canvas, ws);
     mapper.onInject = (action, xP, yP) => {
         injectTouchNormalized(action, xP, yP);

@@ -2,14 +2,22 @@
   "name": "electron-mirror",
   "version": "1.0.0",
   "description": "High Performance Scrcpy Client with Modern UI",
+  "type": "module",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron-forge start",
+    "package": "electron-forge package",
+    "make": "electron-forge make"
   },
   "dependencies": {
     "adbkit": "^2.0.17",
-    "dotenv": "^16.4.5",
-    "electron": "^40.0.0",
+    "octokit": "^5.0.5",
     "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@electron-forge/cli": "^7.11.1",
+    "@electron-forge/maker-squirrel": "^7.11.1",
+    "@electron-forge/maker-zip": "^7.11.1",
+    "electron": "^40.1.0"
   }
 }

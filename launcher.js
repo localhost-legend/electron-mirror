@@ -1,7 +1,23 @@
-const { ipcRenderer } = require('electron');
+const { ipcRenderer } = window.require('electron');
+
+const IPC_TIMEOUT_MS = 7000;
+
+function invokeWithTimeout(channel, ...args) {
+    if (!ipcRenderer || typeof ipcRenderer.invoke !== 'function') {
+        return Promise.reject(new Error('ipcRenderer 不可用，請確認 Renderer 權限與設定'));
+    }
+    return Promise.race([
+        ipcRenderer.invoke(channel, ...args),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('IPC 請求逾時，可能主程序未回應')), IPC_TIMEOUT_MS))
+    ]);
+}
 
 async function loadDevices() {
     const list = document.getElementById('deviceList');
+    if (!list) {
+        console.error('deviceList element not found');
+        return;
+    }
     list.innerHTML = `
         <div class="empty-state">
             <div class="spinner" style="margin: auto;"></div>
@@ -10,7 +26,9 @@ async function loadDevices() {
     `;
 
     try {
-        const devices = await ipcRenderer.invoke('get-devices');
+        console.log('Fetching devices from main process...');
+        const devices = await invokeWithTimeout('get-devices');
+        console.log('Devices:', devices);
 
         if (devices.length === 0) {
             list.innerHTML = `
@@ -23,20 +41,30 @@ async function loadDevices() {
             return;
         }
 
-        list.innerHTML = devices.map(d => `
-            <div class="device-card" data-serial="${d.id}" onclick="connectDevice('${d.id}')">
+        list.innerHTML = devices.map(device => `
+            <div class="device-card" data-serial="${device.id}" data-alias="${encodeURIComponent(device.alias || '')}" data-model="${encodeURIComponent(device.model || '')}">
                 <div class="device-icon">
                     <svg viewBox="0 0 24 24"><path d="M15.5 1h-8C6.12 1 5 2.12 5 3.5v17C5 21.88 6.12 23 7.5 23h8c1.38 0 2.5-1.12 2.5-2.5v-17C18 2.12 16.88 1 15.5 1zm-4 21c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4.5-4H7V4h9v14z"/></svg>
                 </div>
                 <div class="device-info">
-                    <div class="device-name">${d.alias || d.model}</div>
-                    <div class="device-serial">${d.id}</div>
+                    <div class="device-name">${device.alias || device.model}</div>
+                    <div class="device-serial">${device.id}</div>
                 </div>
                 <div class="device-arrow">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
                 </div>
             </div>
         `).join('');
+
+        list.querySelectorAll('.device-card').forEach(card => {
+            card.addEventListener('click', () => {
+                const serial = card.dataset.serial;
+                const alias = decodeURIComponent(card.dataset.alias || '');
+                const model = decodeURIComponent(card.dataset.model || '');
+                connectDevice({ serial, alias: alias || null, model: model || null });
+                card.classList.add('connecting');
+            });
+        });
     } catch (e) {
         list.innerHTML = `
             <div class="empty-state">
@@ -48,9 +76,10 @@ async function loadDevices() {
     }
 }
 
-async function connectDevice(serial) {
+async function connectDevice(device) {
+    const payload = typeof device === 'string' ? { serial: device } : device;
     // Just send event - Launcher stays open, no need to change UI
-    ipcRenderer.send('connect-device', serial);
+    ipcRenderer.send('connect-device', payload);
 }
 
 function showToast(message) {
@@ -65,5 +94,14 @@ ipcRenderer.on('connection-failed', (event, error) => {
     loadDevices(); // Reload to reset UI
 });
 
+ipcRenderer.on('devices-changed', () => {
+    loadDevices();
+});
+
+// Expose for inline button handler
+window.loadDevices = loadDevices;
+
 // Initial load
-loadDevices();
+window.addEventListener('DOMContentLoaded', () => {
+    loadDevices();
+});
