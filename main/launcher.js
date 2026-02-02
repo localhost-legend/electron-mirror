@@ -12,36 +12,62 @@ function invokeWithTimeout(channel, ...args) {
     ]);
 }
 
+let isDownloadingScrcpy = false;
+let isAdbReady = false;
+
 async function loadDevices() {
+    
     const list = document.getElementById('deviceList');
     if (!list) {
         console.error('deviceList element not found');
         return;
     }
-    list.innerHTML = `
+
+    if (isDownloadingScrcpy) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="spinner" style="margin: auto;"></div>
+                <p style="margin-top: 16px;">正在下載 scrcpy...</p>
+                <p style="font-size: 12px; margin-top: 8px;">下載完成後會自動重新載入裝置清單</p>
+            </div>
+        `;
+        return;
+    }
+
+    if (!isAdbReady) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <svg viewBox="0 0 24 24" style="fill: #f39c12;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+                <p style="color: #f39c12;">ADB 尚未就緒</p>
+                <p style="font-size: 12px; margin-top: 8px;">請等待 scrcpy 下載完成或確認 ADB 已安裝</p>
+            </div>
+        `;
+        return;
+    } else {
+        list.innerHTML = `
         <div class="empty-state">
             <div class="spinner" style="margin: auto;"></div>
             <p style="margin-top: 16px;">正在搜尋裝置...</p>
         </div>
     `;
 
-    try {
-        console.log('Fetching devices from main process...');
-        const devices = await invokeWithTimeout('get-devices');
-        console.log('Devices:', devices);
+        try {
+            console.log('Fetching devices from main process...');
+            const devices = await invokeWithTimeout('get-devices');
+            console.log('Devices:', devices);
 
-        if (devices.length === 0) {
-            list.innerHTML = `
+            if (devices.length === 0) {
+                list.innerHTML = `
                 <div class="empty-state">
                     <svg viewBox="0 0 24 24"><path d="M15.5 1h-8C6.12 1 5 2.12 5 3.5v17C5 21.88 6.12 23 7.5 23h8c1.38 0 2.5-1.12 2.5-2.5v-17C18 2.12 16.88 1 15.5 1zm-4 21c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4.5-4H7V4h9v14z"/></svg>
                     <p>沒有找到裝置</p>
                     <p style="font-size: 12px; margin-top: 8px;">請確認 ADB 已連接並授權</p>
                 </div>
             `;
-            return;
-        }
+                return;
+            }
 
-        list.innerHTML = devices.map(device => `
+            list.innerHTML = devices.map(device => `
             <div class="device-card" data-serial="${device.id}" data-alias="${encodeURIComponent(device.alias || '')}" data-model="${encodeURIComponent(device.model || '')}">
                 <div class="device-icon">
                     <svg viewBox="0 0 24 24"><path d="M15.5 1h-8C6.12 1 5 2.12 5 3.5v17C5 21.88 6.12 23 7.5 23h8c1.38 0 2.5-1.12 2.5-2.5v-17C18 2.12 16.88 1 15.5 1zm-4 21c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4.5-4H7V4h9v14z"/></svg>
@@ -56,23 +82,33 @@ async function loadDevices() {
             </div>
         `).join('');
 
-        list.querySelectorAll('.device-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const serial = card.dataset.serial;
-                const alias = decodeURIComponent(card.dataset.alias || '');
-                const model = decodeURIComponent(card.dataset.model || '');
-                connectDevice({ serial, alias: alias || null, model: model || null });
-                card.classList.add('connecting');
+            list.querySelectorAll('.device-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    const serial = card.dataset.serial;
+                    const alias = decodeURIComponent(card.dataset.alias || '');
+                    const model = decodeURIComponent(card.dataset.model || '');
+                    connectDevice({ serial, alias: alias || null, model: model || null });
+                    card.classList.add('connecting');
+                });
             });
-        });
+        } catch (e) {
+            const message = e?.message || '';
+            if (message === 'SCRCPY_DOWNLOADING' || message === 'ADB_NOT_READY') {
+                await refreshScrcpyStatus();
+                loadDevices();
+                return;
+            }
+            return;
+        }
+    }
+}
+
+async function refreshScrcpyStatus() {
+    try {
+        const status = await invokeWithTimeout('get-scrcpy-status');
+        isDownloadingScrcpy = !!status?.isScrcpyDownloading;
+        isAdbReady = !!status?.isAdbReady;
     } catch (e) {
-        list.innerHTML = `
-            <div class="empty-state">
-                <svg viewBox="0 0 24 24" style="fill: #e74c3c;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
-                <p style="color: #e74c3c;">無法連接 ADB</p>
-                <p style="font-size: 12px; margin-top: 8px;">${e.message}</p>
-            </div>
-        `;
     }
 }
 
@@ -98,10 +134,44 @@ ipcRenderer.on('devices-changed', () => {
     loadDevices();
 });
 
+ipcRenderer.on('scrcpy-download-start', () => {
+    isDownloadingScrcpy = true;
+    isAdbReady = false;
+    loadDevices();
+});
+
+ipcRenderer.on('scrcpy-download-complete', () => {
+    isDownloadingScrcpy = false;
+    isAdbReady = true;
+    loadDevices();
+});
+
+ipcRenderer.on('scrcpy-download-failed', (event, message) => {
+    isDownloadingScrcpy = false;
+    isAdbReady = false;
+    const list = document.getElementById('deviceList');
+    if (!list) {
+        return;
+    }
+    list.innerHTML = `
+        <div class="empty-state">
+            <svg viewBox="0 0 24 24" style="fill: #e74c3c;"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+            <p style="color: #e74c3c;">下載 scrcpy 失敗</p>
+            <p style="font-size: 12px; margin-top: 8px;">${message || '未知錯誤'}</p>
+        </div>
+    `;
+});
+
+ipcRenderer.on('scrcpy-status-changed', (event, status) => {
+    isDownloadingScrcpy = !!status?.isScrcpyDownloading;
+    isAdbReady = !!status?.isAdbReady;
+    loadDevices();
+});
+
 // Expose for inline button handler
 window.loadDevices = loadDevices;
 
 // Initial load
 window.addEventListener('DOMContentLoaded', () => {
-    loadDevices();
+    refreshScrcpyStatus().finally(() => loadDevices());
 });

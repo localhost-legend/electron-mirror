@@ -158,8 +158,19 @@ function registerIpcHandlers({ adbPath, launchScreenMirror, createOverviewWindow
         const resolved = typeof adbPath === 'function' ? adbPath() : adbPath;
         return resolved || 'adb';
     };
+    ipcMain.handle('get-scrcpy-status', () => ({
+        isScrcpyDownloading: state.isScrcpyDownloading,
+        isAdbReady: state.isAdbReady
+    }));
+
     ipcMain.handle('get-devices', async () => {
         try {
+            if (state.isScrcpyDownloading) {
+                throw new Error('SCRCPY_DOWNLOADING');
+            }
+            if (!state.isAdbReady) {
+                throw new Error('ADB_NOT_READY');
+            }
             const devices = await client.listDevices();
             const enriched = await Promise.all(devices.map(async (d) => {
                 let model = 'Unknown';

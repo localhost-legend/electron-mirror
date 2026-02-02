@@ -159,6 +159,7 @@ function handleVideoPayload(payload, pts) {
             // For some streams, we might need to prepend config.
             // But for MuMu, it seems just feeding the keyframe is fine (or the config is implied).
             // We'll trust the flow that worked before.
+            // BUT WHO IS MUMU???????????????
             dataToFeed = append(vPendingConfig, payload);
             // Keep vPendingConfig for future resets
         }

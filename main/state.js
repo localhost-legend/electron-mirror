@@ -15,4 +15,6 @@ export default {
     audioSocket: null,
     controlSocket: null,
     streamHistory: [],
+    isScrcpyDownloading: false,
+    isAdbReady: false,
 };

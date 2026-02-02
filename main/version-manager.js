@@ -6,9 +6,18 @@ import { execSync } from 'child_process';
 import { Octokit, App } from 'octokit';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { app } from 'electron';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+function getBaseRoot() {
+    if (app?.isPackaged) {
+        return path.join(process.resourcesPath, 'app.asar.unpacked');
+    }
+
+    return path.join(__dirname, '..');
+}
 
 // Get platform-specific file extension
 function getPlatformFileInfo() {
@@ -45,7 +54,11 @@ async function fetchLatestVersion() {
 // Get installed version from directory name
 function getInstalledVersion() {
     const platform = process.platform;
-    const appDir = path.dirname(path.dirname(__filename));
+    const appDir = getBaseRoot();
+
+    if (!fs.existsSync(appDir)) {
+        return null;
+    }
 
     if (platform === 'win32') {
         const pattern = /scrcpy-win64-v(.+)/;
@@ -71,7 +84,7 @@ function getInstalledVersion() {
 // Get scrcpy directory path for current platform
 function getScrcpyDir(version) {
     const platform = process.platform;
-    const appDir = path.dirname(path.dirname(__filename));
+    const appDir = getBaseRoot();
 
     if (platform === 'win32') {
         return path.join(appDir, `scrcpy-win64-v${version}`);
@@ -127,6 +140,8 @@ async function downloadScrcpy(version) {
     fs.writeFileSync(tmpPath, Buffer.from(response.data));
 
     const targetDir = getScrcpyDir(version);
+    const baseRoot = getBaseRoot();
+    fs.mkdirSync(baseRoot, { recursive: true });
     fs.mkdirSync(targetDir, { recursive: true });
 
     if (extension === '.zip') {
