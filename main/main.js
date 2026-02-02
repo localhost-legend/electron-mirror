@@ -1,11 +1,11 @@
 import { app } from 'electron';
-import state from './main/state.js';
-import { getScrcpyConfig } from './main/config.js';
-import { checkForUpdates, downloadScrcpy, fetchLatestVersion } from './main/version-manager.js';
-import { createLauncherWindow, createOverviewWindow, createMainWindow, snapWindowToRatio, updateWindowAspectRatio } from './main/windows.js';
-import { initWebSocketServers, startScrcpy, stopScrcpy } from './main/scrcpy.js';
-import { registerIpcHandlers } from './main/ipc/handlers.js';
-import { startDeviceMonitor, clearTrackedDevice, setAdbPath, stopAdbServer } from './main/adb.js';
+import state from './state.js';
+import { getScrcpyConfig } from './config.js';
+import { checkForUpdates, downloadScrcpy, fetchLatestVersion } from './version-manager.js';
+import { createLauncherWindow, createOverviewWindow, createMainWindow, snapWindowToRatio, updateWindowAspectRatio } from './windows.js';
+import { initWebSocketServers, startScrcpy, stopScrcpy } from './scrcpy.js';
+import { registerIpcHandlers } from './ipc/handlers.js';
+import { startDeviceMonitor, clearTrackedDevice, setAdbPath, stopAdbServer } from './adb.js';
 
 let scrcpyPaths = null;
 

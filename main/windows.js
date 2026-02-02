@@ -38,13 +38,13 @@ const defaultOverviewWindowOptions = {
 function createLauncherWindow() {
     state.launcherWindow = new BrowserWindow(defaultLuncherWindowOptions.windowsetting
     );
-    state.launcherWindow.loadFile(path.join(__dirname, '..', 'launcher.html'));
+    state.launcherWindow.loadFile(path.join(__dirname,'..', 'UI', 'launcher.html'));
 }
 
 function createOverviewWindow() {
     state.overviewWindow = new BrowserWindow(defaultOverviewWindowOptions.windowsetting
     );
-    state.overviewWindow.loadFile(path.join(__dirname, '..', 'overview.html'));
+    state.overviewWindow.loadFile(path.join(__dirname, '..', 'UI', 'overview.html'));
     state.overviewWindow.on('closed', () => {
         state.overviewWindow = null;
     });
@@ -76,7 +76,7 @@ function createMainWindow({ onClosed } = {}) {
 
     state.mainWindow = new BrowserWindow(defaultMainWindowOptions.windowsetting);
 
-    state.mainWindow.loadFile(path.join(__dirname, '..', 'index.html'));
+    state.mainWindow.loadFile(path.join(__dirname, '..', 'UI', 'screenMirror.html'));
     setupWindowListeners();
     updateWindowAspectRatio();
 

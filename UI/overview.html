@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Electron Mirror - Overview</title>
+    <link rel="stylesheet" href="overview.css">
+</head>
+
+<body>
+    <aside class="sidebar">
+        <div class="sidebar-header">
+            <div class="device-name" id="deviceName">載入中...</div>
+            <div class="device-serial" id="deviceSerial">--</div>
+        </div>
+
+        <nav class="nav-section">
+            <div class="nav-label">功能</div>
+            <div class="nav-item active" data-page="overview" onclick="switchPage('overview')">
+                <svg viewBox="0 0 24 24">
+                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
+                </svg>
+                <span>總覽</span>
+            </div>
+            <div class="nav-item" onclick="startScreenMirror()">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z" />
+                </svg>
+                <span>螢幕鏡像</span>
+            </div>
+
+            <!-- 檔案管理 + 快速存取子選單 -->
+            <div class="nav-item" data-page="files" onclick="switchPage('files')">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" />
+                </svg>
+                <span>檔案管理</span>
+            </div>
+            <!-- Quick Paths 子選單 - 只在檔案管理時展開 -->
+            <div id="quickPaths" class="quick-paths-submenu">
+                <div class="quick-path" data-path="/" onclick="navigateTo('/')">🏠 根目錄</div>
+                <div class="quick-path" data-path="/sdcard" onclick="navigateTo('/sdcard')">📁 內部儲存</div>
+                <div class="quick-path" data-path="/sdcard/Download" onclick="navigateTo('/sdcard/Download')">📥 下載
+                </div>
+                <div class="quick-path" data-path="/sdcard/DCIM" onclick="navigateTo('/sdcard/DCIM')">📷 相機</div>
+                <div class="quick-path" data-path="/sdcard/Pictures" onclick="navigateTo('/sdcard/Pictures')">🖼️ 圖片
+                </div>
+                <div class="quick-path" data-path="/sdcard/Music" onclick="navigateTo('/sdcard/Music')">🎵 音樂</div>
+                <div class="quick-path" data-path="/sdcard/Documents" onclick="navigateTo('/sdcard/Documents')">📄 文件
+                </div>
+            </div>
+
+            <div class="nav-item" data-page="apps" onclick="switchPage('apps')">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z" />
+                </svg>
+                <span>應用管理</span>
+            </div>
+            <div class="nav-item" data-page="notifications" onclick="switchPage('notifications')">
+                <svg viewBox="0 0 24 24">
+                    <path
+                        d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.89 2 2 2zm6-6v-5c0-3.07-1.64-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.63 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2z" />
+                </svg>
+                <span>通知中心</span>
+            </div>
+        </nav>
+    </aside>
+
+    <main>
+        <!-- Overview Page -->
+        <div id="page-overview" class="page-section active">
+            <div class="page-header">
+                <h1>📱 總覽</h1>
+            </div>
+            <div id="overview-content">
+                <div class="loading">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- File Browser Page -->
+        <div id="page-files" class="page-section">
+            <div class="page-header">
+                <h1>📁 檔案管理</h1>
+                <div class="toolbar">
+                    <button class="btn" onclick="copyPath()" title="複製路徑">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z" />
+                        </svg>
+                        複製路徑
+                    </button>
+                    <button class="btn" onclick="showGotoModal()" title="跳轉">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z" />
+                        </svg>
+                        跳轉
+                    </button>
+                    <button class="btn" onclick="navigateTo('/sdcard')" title="首頁">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
+                        </svg>
+                        首頁
+                    </button>
+                    <button class="btn btn-primary" onclick="uploadFile()">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z" />
+                        </svg>
+                        上傳
+                    </button>
+                </div>
+            </div>
+            <div class="breadcrumb" id="breadcrumb"></div>
+            <div id="file-content" class="file-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- App Manager Page -->
+        <div id="page-apps" class="page-section">
+            <div class="page-header">
+                <h1>📦 應用管理</h1>
+                <div class="toolbar">
+                    <div class="search-box">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z" />
+                        </svg>
+                        <input type="text" id="appSearch" placeholder="搜索..." oninput="filterApps()">
+                    </div>
+                    <div class="filter-tabs">
+                        <div class="filter-tab active" data-filter="user" onclick="setAppFilter('user')">用戶</div>
+                        <div class="filter-tab" data-filter="system" onclick="setAppFilter('system')">系統</div>
+                        <div class="filter-tab" data-filter="all" onclick="setAppFilter('all')">全部</div>
+                    </div>
+                    <div class="view-toggle">
+                        <div class="view-btn active" data-view="grid" onclick="setAppView('grid')" title="網格">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-10v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z" />
+                            </svg>
+                        </div>
+                        <div class="view-btn" data-view="list" onclick="setAppView('list')" title="清單">
+                            <svg viewBox="0 0 24 24">
+                                <path
+                                    d="M4 14h4v-4H4v4zm0 5h4v-4H4v4zM4 9h4V5H4v4zm5 5h12v-4H9v4zm0 5h12v-4H9v4zM9 5v4h12V5H9z" />
+                            </svg>
+                        </div>
+                    </div>
+                    <button class="btn btn-primary" onclick="installApk()">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+                        </svg>
+                        安裝 APK
+                    </button>
+                </div>
+            </div>
+            <div id="app-content" class="app-grid">
+                <div class="loading">
+                    <div class="spinner"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notifications Page -->
+        <div id="page-notifications" class="page-section">
+            <div class="page-header">
+                <h1>🔔 通知中心</h1>
+                <div class="toolbar">
+                    <button class="btn" onclick="refreshNotifications()">
+                        <svg viewBox="0 0 24 24">
+                            <path
+                                d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z" />
+                        </svg>
+                        重新整理
+                    </button>
+                    <button class="btn" onclick="clearAllNotifications()">
+                        <svg viewBox="0 0 24 24">
+                            <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" />
+                        </svg>
+                        全部清除
+                    </button>
+                </div>
+            </div>
+            <div id="notification-content">
+                <div class="empty-state">
+                    <p>📱 通知監控已啟用</p>
+                    <p style="margin-top: 8px; color: #555;">當 Android 裝置收到通知時，會顯示在這裡並同步到系統通知中心</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Go To Path Modal -->
+    <div class="modal-overlay" id="gotoModal">
+        <div class="modal">
+            <h3>跳轉到路徑</h3>
+            <input type="text" id="gotoPath" placeholder="/sdcard/..." onkeypress="if(event.key==='Enter')gotoPath()">
+            <div class="modal-actions">
+                <button class="btn" onclick="closeGotoModal()">取消</button>
+                <button class="btn btn-primary" onclick="gotoPath()">前往</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast" id="toast"></div>
+
+    <script src="../main/overview.js"></script>
+</body>
+
+</html>

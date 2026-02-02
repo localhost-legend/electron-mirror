@@ -1,11 +1,4 @@
-<!DOCTYPE html>
-<html>
-
-<head>
-    <meta charset="UTF-8">
-    <title></title>
-    <style>
-        * {
+* {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
@@ -252,6 +245,43 @@
             box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
         }
 
+        /* IME Floating Container (inline styles moved here) */
+        #ime-container {
+            display: none;
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(20, 20, 30, 0.9);
+            padding: 10px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 50;
+        }
+
+        #ime-container #ime-input {
+            background: #f0f0f5;
+            border: none;
+            color: #1a1a1a;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 16px;
+            outline: none;
+            margin-right: 10px;
+            width: 250px;
+        }
+
+        #ime-container #btn-send {
+            padding: 10px 20px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
 
 
         /* Loading Overlay */
@@ -293,6 +323,17 @@
             line-height: 1.6;
         }
 
+        #loading-overlay #status {
+            margin-top: 10px;
+            color: #ff4444;
+            display: none;
+        }
+
+        #btn-return-overview {
+            background: rgba(102, 126, 234, 0.2);
+            color: #667eea;
+        }
+
         /* Key Mapper Widgets */
         .key-widget {
             position: absolute;
@@ -328,107 +369,3 @@
             white-space: nowrap;
             pointer-events: none;
         }
-    </style>
-</head>
-
-<body>
-    <div id="app">
-        <!-- Sidebar Trigger Zone (for hover detection) -->
-        <div id="sidebar-trigger"></div>
-
-        <!-- Video Container -->
-        <div id="video-container">
-            <canvas id="videoCanvas"></canvas>
-
-            <!-- Loading Overlay (Moved inside to cover video area) -->
-            <div id="loading-overlay">
-                <div class="loader"></div>
-                <div class="tip">正在連接裝置...<br>請在手機上允許 USB 偵錯授權</div>
-                <div id="status" style="margin-top:10px; color:#ff4444; display:none;"></div>
-            </div>
-
-            <!-- IME Input -->
-            <div id="ime-container"
-                style="display:none; position:absolute; bottom:30px; left:50%; transform:translateX(-50%); background:rgba(20,20,30,0.9); padding:10px; border-radius:12px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.1); z-index:50;">
-                <input type="text" id="ime-input" placeholder="輸入文字..."
-                    style="background:#f0f0f5; border:none; color:#1a1a1a; padding:10px 15px; border-radius:8px; font-size:16px; outline:none; margin-right:10px; width:250px;">
-                <button id="btn-send"
-                    style="padding:10px 20px; background:#667eea; color:white; border:none; border-radius:8px; cursor:pointer; font-weight:600;">發送</button>
-            </div>
-        </div>
-
-        <div id="sidebar">
-            <button class="btn" id="btn-pin" title="切換側邊欄模式">
-                <svg viewBox="0 0 24 24">
-                    <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
-                </svg>
-            </button>
-            <div class="divider"></div>
-            <button class="btn" id="btn-return-overview" title="檢視資訊"
-                style="background: rgba(102,126,234,0.2); color: #667eea;">
-                <svg viewBox="0 0 24 24">
-                    <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
-                </svg>
-            </button>
-            <div class="divider"></div>
-            <!-- Navigation -->
-            <button class="btn" id="btn-back" title="返回">
-                <svg viewBox="0 0 24 24">
-                    <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z" />
-                </svg>
-            </button>
-
-            <button class="btn" id="btn-home" title="主畫面">
-                <svg viewBox="0 0 24 24">
-                    <path d="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" />
-                </svg>
-            </button>
-
-            <button class="btn" id="btn-recent" title="最近應用">
-                <svg viewBox="0 0 24 24">
-                    <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z" />
-                </svg>
-            </button>
-
-            <div class="divider"></div>
-
-            <!-- Keyboard -->
-            <button class="btn" id="btn-keyboard" title="鍵盤">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M20 5H4c-1.1 0-1.99.9-1.99 2L2 17c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm-9 3h2v2h-2V8zm0 3h2v2h-2v-2zM8 8h2v2H8V8zm0 3h2v2H8v-2zm-1 2H5v-2h2v2zm0-3H5V8h2v2zm9 7H8v-2h8v2zm0-4h-2v-2h2v2zm0-3h-2V8h2v2zm3 3h-2v-2h2v2zm0-3h-2V8h2v2z" />
-                </svg>
-            </button>
-
-            <div class="spacer"></div>
-
-            <!-- Key Mapper -->
-            <button class="btn" id="btn-mapper" title="按鍵映射">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
-                </svg>
-            </button>
-
-            <div class="divider"></div>
-
-            <!-- Volume -->
-            <button class="btn" id="btn-vol-up" title="音量+">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z" />
-                </svg>
-            </button>
-
-            <button class="btn" id="btn-vol-down" title="音量-">
-                <svg viewBox="0 0 24 24">
-                    <path
-                        d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
-                </svg>
-            </button>
-        </div>
-
-        <script src="renderer.js"></script>
-</body>
-
-</html>

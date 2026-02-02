@@ -1,5 +1,6 @@
 const { ipcRenderer } = window.require('electron');
-const KeyMapperModule = window.require('./keymapper.js');
+const path = window.require('path');
+const KeyMapperModule = window.require(path.join(__dirname, '..', 'main', 'keymapper.js'));
 
 const canvas = document.getElementById('videoCanvas');
 const ctx = canvas.getContext('2d');
