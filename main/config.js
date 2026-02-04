@@ -4,10 +4,10 @@ import { getInstalledVersion, getScrcpyDir } from './version-manager.js';
 
 function getScrcpyConfig() {
     const version = getInstalledVersion();
-    
+
     if (!version) {
         // If no version is installed, we cannot provide a config.
-        // The application should ensure ensureScrcpy() is called before accessing this.
+        // The main process should verify installation before accessing this.
         return {
             SCRCPY_VERSION: null,
             SCRCPY_SERVER_PATH: null,
@@ -26,11 +26,23 @@ function getScrcpyConfig() {
         serverPath = path.join(scrcpyDir, 'scrcpy-server');
         adbPath = path.join(scrcpyDir, 'adb.exe');
     } else if (platform === 'darwin') {
-        serverPath = path.join(scrcpyDir, 'scrcpy-server');
-        adbPath = path.join(scrcpyDir, 'adb'); // Use bundled adb if available, or system adb
-        
-        // If bundled adb doesn't exist, fallback to system 'adb'
-        if (!fs.existsSync(adbPath)) {
+        const standardServerPath = path.join(scrcpyDir, 'scrcpy-server');
+        const homebrewServerPath = path.join(scrcpyDir, 'share/scrcpy/scrcpy-server.jar');
+
+        if (fs.existsSync(standardServerPath)) {
+            serverPath = standardServerPath;
+        } else if (fs.existsSync(homebrewServerPath)) {
+            serverPath = homebrewServerPath;
+        } else {
+            // Fallback to standard if neither found (will likely fail but consistent)
+            serverPath = standardServerPath;
+        }
+
+        const bundledAdb = path.join(scrcpyDir, 'adb');
+        // If bundled adb exists using it, otherwise fallback to system 'adb'
+        if (fs.existsSync(bundledAdb)) {
+            adbPath = bundledAdb;
+        } else {
             adbPath = 'adb';
         }
     } else {

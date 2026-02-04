@@ -75,10 +75,10 @@ function getInstalledVersion() {
     }
 
     const { pattern } = getPlatformFileInfo();
-    
+
     // We look for directories starting with the pattern
     const dirs = fs.readdirSync(appDir).filter(d => d.startsWith(pattern));
-    
+
     if (dirs.length === 0) {
         return null;
     }
@@ -93,14 +93,43 @@ function getInstalledVersion() {
         }
     }
 
-    return maxVersion;
+    if (maxVersion) {
+        return maxVersion;
+    }
+
+    // Fallback: Check system installation (e.g. Homebrew on macOS)
+    if (process.platform === 'darwin') {
+        try {
+            const output = execSync('scrcpy --version', { encoding: 'utf-8' }).trim();
+            const match = output.match(/scrcpy (\d+\.\d+\.\d+)/);
+            if (match) {
+                return match[1];
+            }
+        } catch (e) {
+            // Ignore if not found
+        }
+    }
+
+    return null;
 }
 
 // Get scrcpy directory path for current platform
 function getScrcpyDir(version) {
     const appDir = getBaseRoot();
     const { pattern } = getPlatformFileInfo();
-    return path.join(appDir, `${pattern}${version}`);
+    const localPath = path.join(appDir, `${pattern}${version}`);
+
+    // If local path exists, use it
+    if (fs.existsSync(localPath)) {
+        return localPath;
+    }
+
+    // Fallback: Return Homebrew path for macOS if local not found
+    if (process.platform === 'darwin') {
+        return `/opt/homebrew/Cellar/scrcpy/${version}`;
+    }
+
+    return localPath;
 }
 
 // Check if version is installed
@@ -115,10 +144,10 @@ async function downloadScrcpy(version) {
         console.log('[VersionManager] Download already in progress.');
         return;
     }
-    
+
     state.isScrcpyDownloading = true;
     console.log(`[VersionManager] Downloading scrcpy version ${version}...`);
-    
+
     try {
         const { pattern, extension } = getPlatformFileInfo();
         const octokit = new Octokit();
@@ -156,14 +185,14 @@ async function downloadScrcpy(version) {
 
         const targetDir = getScrcpyDir(version);
         const baseRoot = getBaseRoot();
-        
+
         // Clean up old versions if any
         const oldVersion = getInstalledVersion();
         if (oldVersion && oldVersion !== version) {
-             const oldDir = getScrcpyDir(oldVersion);
-             if (fs.existsSync(oldDir)) {
-                 fs.rmSync(oldDir, { recursive: true, force: true });
-             }
+            const oldDir = getScrcpyDir(oldVersion);
+            if (fs.existsSync(oldDir)) {
+                fs.rmSync(oldDir, { recursive: true, force: true });
+            }
         }
 
         fs.mkdirSync(baseRoot, { recursive: true });
@@ -218,41 +247,6 @@ async function checkForUpdates() {
     }
 }
 
-// Main function to ensure scrcpy is available and up-to-date
-async function ensureScrcpy() {
-    try {
-        const { latestVersion, installedVersion, updateAvailable } = await checkForUpdates();
-
-        if (!installedVersion) {
-            if (!latestVersion) {
-                throw new Error('No installed version and failed to fetch latest version.');
-            }
-            console.log('[VersionManager] No scrcpy found. Downloading latest version...');
-            await downloadScrcpy(latestVersion);
-            return getScrcpyDir(latestVersion);
-        }
-
-        if (updateAvailable) {
-            console.log(`[VersionManager] New version available (${latestVersion}). Updating...`);
-            await downloadScrcpy(latestVersion);
-            return getScrcpyDir(latestVersion);
-        }
-
-        console.log('[VersionManager] Scrcpy is up to date.');
-        return getScrcpyDir(installedVersion);
-
-    } catch (e) {
-        console.error('[VersionManager] Failed to ensure scrcpy:', e);
-        // If update check fails but we have an installed version, use it
-        const installedVersion = getInstalledVersion();
-        if (installedVersion) {
-            console.warn('[VersionManager] Using existing version due to update check failure.');
-            return getScrcpyDir(installedVersion);
-        }
-        throw e; // Cannot proceed without scrcpy
-    }
-}
-
 export {
     fetchLatestVersion,
     getInstalledVersion,
@@ -261,6 +255,5 @@ export {
     downloadScrcpy,
     checkForUpdates,
     getPlatformFileInfo,
-    compareVersions,
-    ensureScrcpy
+    compareVersions
 };

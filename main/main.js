@@ -1,7 +1,7 @@
 import { app } from 'electron';
 import state from './state.js';
 import { getScrcpyConfig } from './config.js';
-import { ensureScrcpy } from './version-manager.js';
+import { checkForUpdates, downloadScrcpy } from './version-manager.js';
 import { createLauncherWindow, createOverviewWindow, createMainWindow, snapWindowToRatio, updateWindowAspectRatio } from './windows.js';
 import { initWebSocketServers, startScrcpy, stopScrcpy } from './scrcpy.js';
 import { registerIpcHandlers } from './ipc/handlers.js';
@@ -53,19 +53,46 @@ function startDeviceMonitorIfReady() {
 async function initializeScrcpy() {
     console.log('[Main] Initializing scrcpy...');
     try {
-        // Notify UI that we are checking/downloading scrcpy
-        // Note: We do NOT set state.isScrcpyDownloading = true here manually.
-        // The version-manager will handle that flag internally if a download actually occurs.
-        notifyLauncher('scrcpy-download-start'); 
+        // Check for updates or missing installation.
+        // This does NOT auto-download, just checks status.
+        const { latestVersion, installedVersion, updateAvailable } = await checkForUpdates();
 
-        // Ensure scrcpy is installed and up-to-date
-        // This handles checking, downloading, and updating logic
-        await ensureScrcpy();
+        // If we have no version at all, we MUST download
+        // If we have an update, we SHOULD download (but logic allows skipping if needed, keeping it simple here)
+        if (!installedVersion || updateAvailable) {
+            const versionToDownload = latestVersion || 'latest';
+            console.log(`[Main] Scrcpy status: installed=${installedVersion}, latest=${latestVersion}. Starting download...`);
 
-        // Now that we are sure scrcpy exists, get the config
+            // Explicitly set state and notify
+            notifyLauncher('scrcpy-download-start');
+
+            try {
+                const downloadPromise = downloadScrcpy(versionToDownload);
+                notifyScrcpyStatus();
+                await downloadPromise;
+
+                state.isScrcpyDownloading = false;
+                notifyLauncher('scrcpy-download-complete');
+                notifyScrcpyStatus();
+            } catch (err) {
+                console.error('[Main] Failed to download scrcpy:', err);
+                state.isScrcpyDownloading = false;
+                state.isAdbReady = false;
+                notifyLauncher('scrcpy-download-failed', err?.message || String(err));
+                notifyScrcpyStatus();
+                // If we have an installed version (even if update failed), we might fallback?
+                // For now, if download fails and we have no version, we are dead.
+                if (!installedVersion) throw err;
+            }
+        }
+
+        // Get config - config.js now handles the "Homebrew fallback" logic implicitly
+        // by checking paths if version exists.
         scrcpyPaths = getScrcpyConfig();
-        
+
         if (!scrcpyPaths || !scrcpyPaths.ADB_PATH) {
+            // One last check: maybe config failed because homebrew path wasn't detected by version manager?
+            // But version-manager.js fix handles that.
             throw new Error('Failed to obtain valid scrcpy configuration.');
         }
 
@@ -73,15 +100,11 @@ async function initializeScrcpy() {
 
         setAdbPath(scrcpyPaths.ADB_PATH);
         state.isAdbReady = true;
-        // Ensure flag is reset (though ensureScrcpy should have done it)
-        state.isScrcpyDownloading = false;
-        
-        notifyLauncher('scrcpy-download-complete');
         notifyScrcpyStatus();
 
         await initWebSocketServers();
-        
-        // Start device monitor now that ADB is ready
+
+        // Start device monitor - SAFE now because download/init is done
         startDeviceMonitorIfReady();
 
     } catch (e) {
@@ -100,9 +123,9 @@ async function launchScreenMirror() {
         if (!scrcpyPaths) {
             throw new Error('Scrcpy not initialized');
         }
-        
-        await startScrcpy({ 
-            adbPath: scrcpyPaths.ADB_PATH, 
+
+        await startScrcpy({
+            adbPath: scrcpyPaths.ADB_PATH,
             scrcpyServerPath: scrcpyPaths.SCRCPY_SERVER_PATH,
             scrcpyVersion: scrcpyPaths.SCRCPY_VERSION
         });
@@ -123,8 +146,8 @@ async function launchScreenMirror() {
 
 app.whenReady().then(async () => {
     createLauncherWindow();
-    
-    // Initialize scrcpy (check/download/update)
+
+    // Initialize scrcpy (check/download/update logic handled inside)
     await initializeScrcpy();
 });
 
