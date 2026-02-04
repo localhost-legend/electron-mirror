@@ -1,47 +1,47 @@
-import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import { app } from 'electron';
-import { getInstalledVersion } from './version-manager.js';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import fs from 'fs';
+import { getInstalledVersion, getScrcpyDir } from './version-manager.js';
 
 function getScrcpyConfig() {
+    const version = getInstalledVersion();
+    
+    if (!version) {
+        // If no version is installed, we cannot provide a config.
+        // The application should ensure ensureScrcpy() is called before accessing this.
+        return {
+            SCRCPY_VERSION: null,
+            SCRCPY_SERVER_PATH: null,
+            ADB_PATH: null
+        };
+    }
+
+    const scrcpyDir = getScrcpyDir(version);
     const platform = process.platform;
-    const baseRoot = app?.isPackaged
-        ? path.join(process.resourcesPath, 'app.asar.unpacked')
-        : path.join(__dirname, '..');
+
+    // Construct paths based on platform
+    let serverPath;
+    let adbPath;
 
     if (platform === 'win32') {
-        const installedVersion = getInstalledVersion();
-        if (!installedVersion) {
-            return {
-                SCRCPY_VERSION: null,
-                SCRCPY_SERVER_PATH: null,
-                ADB_PATH: null
-            };
+        serverPath = path.join(scrcpyDir, 'scrcpy-server');
+        adbPath = path.join(scrcpyDir, 'adb.exe');
+    } else if (platform === 'darwin') {
+        serverPath = path.join(scrcpyDir, 'scrcpy-server');
+        adbPath = path.join(scrcpyDir, 'adb'); // Use bundled adb if available, or system adb
+        
+        // If bundled adb doesn't exist, fallback to system 'adb'
+        if (!fs.existsSync(adbPath)) {
+            adbPath = 'adb';
         }
-        const baseDir = path.join(baseRoot, `scrcpy-win64-v${installedVersion}`);
-        const nestedDir = path.join(baseDir, `scrcpy-win64-v${installedVersion}`);
-        const scrcpyDir = fs.existsSync(path.join(baseDir, 'adb.exe')) ? baseDir : nestedDir;
-        return {
-            SCRCPY_VERSION: installedVersion,
-            SCRCPY_SERVER_PATH: path.join(scrcpyDir, 'scrcpy-server'),
-            ADB_PATH: path.join(scrcpyDir, 'adb.exe')
-        };
+    } else {
+        throw new Error(`Unsupported platform: ${platform}`);
     }
 
-    if (platform === 'darwin') { // WON'T WORK!!!!!!!!! NEED TO FIGURE OUT A WAY TO DOWNLOAD SCRCPY FOR MACOS
-        return {
-            SCRCPY_VERSION: '3.3.4',
-            SCRCPY_SERVER_PATH: '/opt/homebrew/Cellar/scrcpy/3.3.4/share/scrcpy/scrcpy-server.jar',
-            ADB_PATH: 'adb'
-        };
-    }
-
-    throw new Error(`Unsupported platform: ${platform}`);
+    return {
+        SCRCPY_VERSION: version,
+        SCRCPY_SERVER_PATH: serverPath,
+        ADB_PATH: adbPath
+    };
 }
 
 export {

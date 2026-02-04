@@ -7,6 +7,7 @@ import { Octokit, App } from 'octokit';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { app } from 'electron';
+import state from './state.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -15,7 +16,6 @@ function getBaseRoot() {
     if (app?.isPackaged) {
         return path.join(process.resourcesPath, 'app.asar.unpacked');
     }
-
     return path.join(__dirname, '..');
 }
 
@@ -28,9 +28,9 @@ function getPlatformFileInfo() {
             pattern: 'scrcpy-win64-v',
             extension: '.zip'
         };
-    } else if (platform === 'darwin') { // usability unknown
+    } else if (platform === 'darwin') {
         const arch = os.arch(); // x64 or arm64
-        const archMap = { 'x64': 'x86_64', 'arm64': 'arm64' };
+        const archMap = { 'x64': 'x86_64', 'arm64': 'aarch64' };
         return {
             pattern: `scrcpy-macos-${archMap[arch] || arch}-v`,
             extension: '.tar.gz'
@@ -38,129 +38,6 @@ function getPlatformFileInfo() {
     }
 
     throw new Error(`Unsupported platform: ${platform}`);
-}
-
-// Fetch latest version from GitHub API
-async function fetchLatestVersion() {
-    const octokit = new Octokit();
-    const { data } = await octokit.request('GET /repos/{owner}/{repo}/releases/latest', {
-        owner: 'Genymobile',
-        repo: 'scrcpy'
-    });
-    const tag = data.tag_name || '';
-    return tag.startsWith('v') ? tag.slice(1) : tag;
-}
-
-// Get installed version from directory name
-function getInstalledVersion() {
-    const platform = process.platform;
-    const appDir = getBaseRoot();
-
-    if (!fs.existsSync(appDir)) {
-        return null;
-    }
-
-    if (platform === 'win32') {
-        const pattern = /scrcpy-win64-v(.+)/;
-        const dirs = fs.readdirSync(appDir).filter(d => pattern.test(d));
-        if (dirs.length > 0) {
-            const match = dirs[0].match(pattern);
-            return match ? match[1] : null;
-        }
-    } else if (platform === 'darwin') { // usability unknown
-        // For macOS, we check the homebrew installation or bundled version
-        try {
-            const output = execSync('scrcpy --version', { encoding: 'utf-8' }).trim();
-            const match = output.match(/scrcpy (\d+\.\d+\.\d+)/);
-            return match ? match[1] : null;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    return null;
-}
-
-// Get scrcpy directory path for current platform
-function getScrcpyDir(version) {
-    const platform = process.platform;
-    const appDir = getBaseRoot();
-
-    if (platform === 'win32') {
-        return path.join(appDir, `scrcpy-win64-v${version}`);
-    } else if (platform === 'darwin') { //usability unknown
-        // For macOS, scrcpy is typically installed via homebrew
-        return `/opt/homebrew/Cellar/scrcpy/${version}`;
-    }
-
-    throw new Error(`Unsupported platform: ${platform}`);
-}
-
-// Check if version is installed
-function isVersionInstalled(version) {
-    const scrcpyDir = getScrcpyDir(version);
-    return fs.existsSync(scrcpyDir);
-}
-
-// Download file from GitHub releases
-async function downloadScrcpy(version) {
-    console.log(`[VersionManager] Downloading scrcpy version ${version}...`);
-    const { pattern, extension } = getPlatformFileInfo();
-    const octokit = new Octokit();
-
-    const { data } = await octokit.request('GET /repos/{owner}/{repo}/releases/tags/{tag}', {
-        owner: 'Genymobile',
-        repo: 'scrcpy',
-        tag: `v${version}`
-    });
-
-    const asset = data.assets.find(a =>
-        a.name.startsWith(`${pattern}${version}`) && a.name.endsWith(extension)
-    );
-
-    if (!asset) {
-        throw new Error(`No matching asset found for ${version}`);
-    }
-
-    const tmpPath = path.join(os.tmpdir(), asset.name);
-
-    console.log(`[VersionManager] Downloading asset ${asset.name}...`);
-    const response = await octokit.request('GET {url}', {
-        url: asset.url,
-        headers: {
-            accept: 'application/octet-stream'
-        },
-        responseType: 'arraybuffer'
-    });
-
-    if (response.status !== 200) {
-        throw new Error(`Download failed: ${response.status}`);
-    }
-
-    fs.writeFileSync(tmpPath, Buffer.from(response.data));
-
-    const targetDir = getScrcpyDir(version);
-    const baseRoot = getBaseRoot();
-    fs.mkdirSync(baseRoot, { recursive: true });
-    fs.mkdirSync(targetDir, { recursive: true });
-
-    if (extension === '.zip') {
-        execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${tmpPath}' -DestinationPath '${targetDir}' -Force"`);
-        const entries = fs.readdirSync(targetDir, { withFileTypes: true });
-        const innerDir = entries.find(e => e.isDirectory() && e.name.startsWith('scrcpy-win64-v'));
-        if (innerDir) {
-            const innerPath = path.join(targetDir, innerDir.name);
-            for (const item of fs.readdirSync(innerPath)) {
-                fs.renameSync(path.join(innerPath, item), path.join(targetDir, item));
-            }
-            fs.rmdirSync(innerPath);
-        }
-    } else {
-        console.warn('Wrong extension for current platform');
-    }
-
-    fs.unlinkSync(tmpPath);
-    return targetDir;
 }
 
 // Version comparison helper
@@ -176,6 +53,143 @@ function compareVersions(v1, v2) {
     }
 
     return 0;
+}
+
+// Fetch latest version from GitHub API
+async function fetchLatestVersion() {
+    const octokit = new Octokit();
+    const { data } = await octokit.request('GET /repos/{owner}/{repo}/releases/latest', {
+        owner: 'Genymobile',
+        repo: 'scrcpy'
+    });
+    const tag = data.tag_name || '';
+    return tag.startsWith('v') ? tag.slice(1) : tag;
+}
+
+// Get installed version from directory name in our managed folder
+function getInstalledVersion() {
+    const appDir = getBaseRoot();
+
+    if (!fs.existsSync(appDir)) {
+        return null;
+    }
+
+    const { pattern } = getPlatformFileInfo();
+    
+    // We look for directories starting with the pattern
+    const dirs = fs.readdirSync(appDir).filter(d => d.startsWith(pattern));
+    
+    if (dirs.length === 0) {
+        return null;
+    }
+
+    // Extract versions and find the latest one
+    let maxVersion = null;
+
+    for (const dir of dirs) {
+        const version = dir.substring(pattern.length);
+        if (!maxVersion || compareVersions(version, maxVersion) > 0) {
+            maxVersion = version;
+        }
+    }
+
+    return maxVersion;
+}
+
+// Get scrcpy directory path for current platform
+function getScrcpyDir(version) {
+    const appDir = getBaseRoot();
+    const { pattern } = getPlatformFileInfo();
+    return path.join(appDir, `${pattern}${version}`);
+}
+
+// Check if version is installed
+function isVersionInstalled(version) {
+    const scrcpyDir = getScrcpyDir(version);
+    return fs.existsSync(scrcpyDir);
+}
+
+// Download file from GitHub releases
+async function downloadScrcpy(version) {
+    if (state.isScrcpyDownloading) {
+        console.log('[VersionManager] Download already in progress.');
+        return;
+    }
+    
+    state.isScrcpyDownloading = true;
+    console.log(`[VersionManager] Downloading scrcpy version ${version}...`);
+    
+    try {
+        const { pattern, extension } = getPlatformFileInfo();
+        const octokit = new Octokit();
+
+        const { data } = await octokit.request('GET /repos/{owner}/{repo}/releases/tags/{tag}', {
+            owner: 'Genymobile',
+            repo: 'scrcpy',
+            tag: `v${version}`
+        });
+
+        const asset = data.assets.find(a =>
+            a.name.startsWith(`${pattern}${version}`) && a.name.endsWith(extension)
+        );
+
+        if (!asset) {
+            throw new Error(`No matching asset found for ${version}`);
+        }
+
+        const tmpPath = path.join(os.tmpdir(), asset.name);
+
+        console.log(`[VersionManager] Downloading asset ${asset.name}...`);
+        const response = await octokit.request('GET {url}', {
+            url: asset.url,
+            headers: {
+                accept: 'application/octet-stream'
+            },
+            responseType: 'arraybuffer'
+        });
+
+        if (response.status !== 200) {
+            throw new Error(`Download failed: ${response.status}`);
+        }
+
+        fs.writeFileSync(tmpPath, Buffer.from(response.data));
+
+        const targetDir = getScrcpyDir(version);
+        const baseRoot = getBaseRoot();
+        
+        // Clean up old versions if any
+        const oldVersion = getInstalledVersion();
+        if (oldVersion && oldVersion !== version) {
+             const oldDir = getScrcpyDir(oldVersion);
+             if (fs.existsSync(oldDir)) {
+                 fs.rmSync(oldDir, { recursive: true, force: true });
+             }
+        }
+
+        fs.mkdirSync(baseRoot, { recursive: true });
+
+        if (extension === '.zip') {
+            // Windows
+            execSync(`powershell -NoProfile -Command "Expand-Archive -Path '${tmpPath}' -DestinationPath '${baseRoot}' -Force"`);
+        } else if (extension === '.tar.gz') {
+            // macOS / Linux
+            if (!fs.existsSync(targetDir)) {
+                fs.mkdirSync(targetDir, { recursive: true });
+            }
+            execSync(`tar -xzf "${tmpPath}" -C "${baseRoot}"`);
+        } else {
+            console.warn('Wrong extension for current platform');
+        }
+
+        fs.unlinkSync(tmpPath);
+        console.log(`[VersionManager] Scrcpy ${version} installed successfully.`);
+        return targetDir;
+    } catch (error) {
+        console.error('[VersionManager] Download failed:', error);
+        throw error;
+    } finally {
+        state.isScrcpyDownloading = false;
+    }
 }
 
 // Check for updates and return version info
@@ -204,6 +218,41 @@ async function checkForUpdates() {
     }
 }
 
+// Main function to ensure scrcpy is available and up-to-date
+async function ensureScrcpy() {
+    try {
+        const { latestVersion, installedVersion, updateAvailable } = await checkForUpdates();
+
+        if (!installedVersion) {
+            if (!latestVersion) {
+                throw new Error('No installed version and failed to fetch latest version.');
+            }
+            console.log('[VersionManager] No scrcpy found. Downloading latest version...');
+            await downloadScrcpy(latestVersion);
+            return getScrcpyDir(latestVersion);
+        }
+
+        if (updateAvailable) {
+            console.log(`[VersionManager] New version available (${latestVersion}). Updating...`);
+            await downloadScrcpy(latestVersion);
+            return getScrcpyDir(latestVersion);
+        }
+
+        console.log('[VersionManager] Scrcpy is up to date.');
+        return getScrcpyDir(installedVersion);
+
+    } catch (e) {
+        console.error('[VersionManager] Failed to ensure scrcpy:', e);
+        // If update check fails but we have an installed version, use it
+        const installedVersion = getInstalledVersion();
+        if (installedVersion) {
+            console.warn('[VersionManager] Using existing version due to update check failure.');
+            return getScrcpyDir(installedVersion);
+        }
+        throw e; // Cannot proceed without scrcpy
+    }
+}
+
 export {
     fetchLatestVersion,
     getInstalledVersion,
@@ -212,5 +261,6 @@ export {
     downloadScrcpy,
     checkForUpdates,
     getPlatformFileInfo,
-    compareVersions
+    compareVersions,
+    ensureScrcpy
 };
