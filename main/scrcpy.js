@@ -68,9 +68,11 @@ function connectSockets(port) {
                 state.audioSocket.on('data', (d) => {
                     wssAudio.clients.forEach(ws => { if (ws.readyState === WebSocket.OPEN) ws.send(d); });
                 });
+                state.audioSocket.on('error', (e) => log(`[Node] Audio Socket Error: ${e.message}`));
 
                 setTimeout(() => {
                     state.controlSocket = net.connect(port, '127.0.0.1', () => log('[Node] Control Connected'));
+                    state.controlSocket.on('error', (e) => log(`[Node] Control Socket Error: ${e.message}`));
                 }, 100);
             });
         }, 100);
