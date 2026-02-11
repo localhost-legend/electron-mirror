@@ -5,7 +5,14 @@ import { checkForUpdates, downloadScrcpy } from './version-manager.js';
 import { createLauncherWindow, createOverviewWindow, createMainWindow, snapWindowToRatio, updateWindowAspectRatio } from './windows.js';
 import { initWebSocketServers, startScrcpy, stopScrcpy } from './scrcpy.js';
 import { registerIpcHandlers } from './ipc/handlers.js';
-import { startDeviceMonitor, clearTrackedDevice, setAdbPath, stopAdbServer } from './adb.js';
+import { startDeviceMonitor, clearTrackedDevice, setAdbPath, stopAdbServer,initAdb } from './adb.js';
+
+process.on('uncaughtException', (error) => {
+    if(error.code === 'ECONNRESET' || error.message.includes('ECONNRESET')) {
+        console.warn('[Main] Caught unhandled exception:', error.message); // just ignore, idk why the fuck it happen on windows adb
+    }
+    console.error('[Main] Uncaught Exception:', error); // for something serious really happen
+});
 
 let scrcpyPaths = null;
 
@@ -99,10 +106,11 @@ async function initializeScrcpy() {
         console.log(`[Main] Scrcpy initialized. Version: ${scrcpyPaths.SCRCPY_VERSION}`);
 
         setAdbPath(scrcpyPaths.ADB_PATH);
+        await initAdb(); // wait for adb to be ready before starting device monitor
         state.isAdbReady = true;
         notifyScrcpyStatus();
 
-        await initWebSocketServers();
+        initWebSocketServers();
 
         // Start device monitor - SAFE now because download/init is done
         startDeviceMonitorIfReady();

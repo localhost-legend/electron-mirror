@@ -116,37 +116,68 @@ function setAdbPath(newPath) {
     return client;
 }
 
-async function stopAdbServer() {
-    try {
-        if (deviceTracker) {
-            deviceTracker.removeAllListeners();
-            if (typeof deviceTracker.end === 'function') {
-                await deviceTracker.end();
-            } else if (typeof deviceTracker.close === 'function') {
-                deviceTracker.close();
+async function initAdb() {
+    console.log('[ADB] Initializing adb client');
+
+    await stopAdbServer(); // tell adb to suicide first
+
+    await new Promise((resolve, reject) => { // test adb is alive or killed
+        execFile(adbPath || 'adb', ['version'], (err) => {
+            if (err) {
+                console.error('[ADB] Failed to execute adb:', err);
+                resolve(false);
             }
-            deviceTracker = null;
-        }
-
-        if (client && typeof client.kill === 'function') {
-            await client.kill();
-            return;
-        }
-
-        await new Promise((resolve) => {
-            execFile(adbPath || 'adb', ['kill-server'], () => resolve());
+            console.log('[ADB] adb client initialized successfully');
+            resolve(true);
         });
-    } catch (e) {
-        console.error('[ADB] Failed to stop adb server:', e);
+    });
+
+    for (let attempt = 0; attempt < 3; attempt++) { // retry
+        try {
+            await client.version();
+            console.log('[ADB] adb server is responsive');
+            return true;
+        } catch (e) {
+            console.warn(`[ADB] adb server not responsive (attempt ${attempt + 1}/3), retrying...`, e);
+            await new Promise((res) => setTimeout(res, 500));
+        }
     }
+    console.error('[ADB] adb server failed to start or respond after multiple attempts');
+    return false;
 }
 
-export {
-    adb,
-    client,
-    startDeviceMonitor,
-    setTrackedDevice,
-    clearTrackedDevice,
-    setAdbPath,
-    stopAdbServer
-};
+    async function stopAdbServer() {
+        try {
+            if (deviceTracker) {
+                deviceTracker.removeAllListeners();
+                if (typeof deviceTracker.end === 'function') {
+                    await deviceTracker.end();
+                } else if (typeof deviceTracker.close === 'function') {
+                    deviceTracker.close();
+                }
+                deviceTracker = null;
+            }
+
+            if (client && typeof client.kill === 'function') {
+                await client.kill();
+                return;
+            }
+
+            await new Promise((resolve) => {
+                execFile(adbPath || 'adb', ['kill-server'], () => resolve());
+            });
+        } catch (e) {
+            console.error('[ADB] Failed to stop adb server:', e);
+        }
+    }
+
+    export {
+        adb,
+        client,
+        startDeviceMonitor,
+        setTrackedDevice,
+        clearTrackedDevice,
+        setAdbPath,
+        stopAdbServer,
+        initAdb
+    };
