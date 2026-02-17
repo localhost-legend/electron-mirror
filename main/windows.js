@@ -96,6 +96,9 @@ function createMainWindow({ onClosed } = {}) {
 function setupWindowListeners() {
     if (!state.mainWindow) return;
     state.mainWindow.on('resize', () => {
+        // 立即修正比例，避免黑邊出現
+        snapWindowToRatio();
+
         clearTimeout(resizeTimeout);
         resizeTimeout = setTimeout(() => {
             snapWindowToRatio();
@@ -139,12 +142,9 @@ function updateWindowAspectRatio() {
 
     const targetContentWidth = Math.max(1, Math.round(cH * videoRatio) + sidebarWidth);
     const targetWindowWidth = targetContentWidth + chromeWidth;
-    const targetWindowHeight = cH + chromeHeight;
 
-    mainWindow.setAspectRatio(videoRatio, {
-        width: chromeWidth + sidebarWidth,
-        height: chromeHeight
-    });
+    // 移除 setAspectRatio，避免拖曳時 Electron 強制調整造成黑邊
+    // 改為僅在 resize 結束後通過 snapWindowToRatio 修正
 
     if (Math.abs(wW - targetWindowWidth) > 2) {
         mainWindow.setSize(targetWindowWidth, wH);
