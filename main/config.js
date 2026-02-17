@@ -27,12 +27,15 @@ function getScrcpyConfig() {
         adbPath = path.join(scrcpyDir, 'adb.exe');
     } else if (platform === 'darwin') {
         const standardServerPath = path.join(scrcpyDir, 'scrcpy-server');
-        const homebrewServerPath = path.join(scrcpyDir, 'share/scrcpy/scrcpy-server.jar');
+        const homebrewServerPath = path.join(scrcpyDir, 'share/scrcpy/scrcpy-server');
+        const homebrewServerJarPath = path.join(scrcpyDir, 'share/scrcpy/scrcpy-server.jar');
 
         if (fs.existsSync(standardServerPath)) {
             serverPath = standardServerPath;
         } else if (fs.existsSync(homebrewServerPath)) {
             serverPath = homebrewServerPath;
+        } else if (fs.existsSync(homebrewServerJarPath)) {
+            serverPath = homebrewServerJarPath;
         } else {
             // Fallback to standard if neither found (will likely fail but consistent)
             serverPath = standardServerPath;
