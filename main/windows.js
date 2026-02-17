@@ -83,6 +83,10 @@ function createMainWindow({ onClosed } = {}) {
     state.mainWindow.on('closed', () => {
         if (onClosed) onClosed();
         state.mainWindow = null;
+        // Notify launcher to refresh device list so device becomes clickable again
+        if (state.launcherWindow && !state.launcherWindow.isDestroyed()) {
+            state.launcherWindow.webContents.send('devices-changed');
+        }
     });
 
     state.mainWindow.on('enter-full-screen', () => {
