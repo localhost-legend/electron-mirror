@@ -79,10 +79,6 @@ function getInstalledVersion() {
     // We look for directories starting with the pattern
     const dirs = fs.readdirSync(appDir).filter(d => d.startsWith(pattern));
 
-    if (dirs.length === 0) {
-        return null;
-    }
-
     // Extract versions and find the latest one
     let maxVersion = null;
 
