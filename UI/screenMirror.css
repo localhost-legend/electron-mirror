@@ -22,13 +22,30 @@
             overflow: hidden;
         }
 
+        #app:not(.stream-ready) #video-container {
+            right: 0 !important;
+        }
+
+        #app:not(.stream-ready) #sidebar,
+        #app:not(.stream-ready) #sidebar-edge-trigger {
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }
+
         #video-container {
             position: absolute;
-            inset: 0;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             z-index: 10;
+        }
+
+        #app.sidebar-open #video-container {
+            right: 56px;
         }
 
         canvas {
@@ -37,8 +54,7 @@
             object-fit: contain;
             display: block;
         }
-
-        /* --- Unified Sidebar Layout --- */
+        /* Sidebar sits outside the video region and should not change video ratio. */
         #sidebar {
             width: 56px;
             background: linear-gradient(180deg, rgba(20, 20, 30, 0.95) 0%, rgba(10, 10, 15, 0.98) 100%);
@@ -46,67 +62,125 @@
             flex-direction: column;
             align-items: center;
             padding: 16px 0;
+            gap: 8px;
             border-left: 1px solid rgba(255, 255, 255, 0.08);
             backdrop-filter: blur(20px);
             z-index: 100;
-            /* Sidebar always on top */
-            transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-                transform 0.3s ease-out,
-                opacity 0.2s ease;
-            overflow: hidden;
+            transition: none;
+            overflow: visible;
             flex-shrink: 0;
-        }
-
-        /* 1. PINNED MODE: Fixed on right, overlays WITHOUT shifting center */
-        #sidebar.pinned {
             position: absolute;
             right: 0;
             top: 0;
             height: 100%;
-            transform: translateX(0) !important;
-            opacity: 1 !important;
-            width: 56px;
             background: rgba(15, 15, 25, 0.95);
-        }
-
-        /* 2. FLOATING (AUTO-HIDE) MODE: Overlays content, hidden by default */
-        #sidebar.floating {
-            position: absolute;
-            right: 0;
-            top: 0;
-            height: 100%;
             transform: translateX(100%);
-            /* Hidden off-screen to the right */
             opacity: 0;
-            background: rgba(15, 15, 25, 0.9);
-            box-shadow: -10px 0 30px rgba(0, 0, 0, 0.5);
             pointer-events: none;
-            /* Can't click/interact when hidden */
         }
 
-        /* Revealed state for floating mode on hover */
-        #sidebar.floating.revealed {
+        #app.sidebar-open #sidebar {
             transform: translateX(0);
             opacity: 1;
             pointer-events: auto;
         }
 
-        /* Transparent Trigger Zone for Hover Detection */
-        #sidebar-trigger {
+        #sidebar-edge-trigger {
             position: absolute;
-            right: 0;
-            top: 0;
-            width: 15px;
-            /* Narrow area near edge */
-            height: 100%;
-            z-index: 90;
+            top: 14px;
+            right: 6px;
+            width: 44px;
+            height: 44px;
+            z-index: 140;
+            background: rgba(15, 15, 25, 0.94);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            cursor: pointer;
+            color: rgba(255, 255, 255, 0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s ease;
+            padding: 0;
+        }
+
+        #sidebar-edge-trigger:hover {
+            background: rgba(30, 30, 42, 0.96);
+            color: rgba(255, 255, 255, 0.95);
+            transform: scale(1.05);
+        }
+
+        #sidebar-edge-trigger svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+        #app.sidebar-open #sidebar-edge-trigger {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        #btn-sidebar-toggle {
+            border: none;
             background: transparent;
+        }
+
+        #btn-sidebar-toggle svg {
+            transform: rotate(0deg);
+        }
+
+        #btn-sidebar-more {
+            display: none;
+        }
+
+        #sidebar.compact.has-hidden-actions #btn-sidebar-more {
+            display: flex;
+        }
+
+        #sidebar .overflow-hidden {
+            display: none;
+        }
+
+        #sidebar-more-menu {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            min-width: 140px;
+            padding: 8px;
+            border-radius: 10px;
+            background: rgba(14, 14, 22, 0.98);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            box-shadow: 0 10px 28px rgba(0, 0, 0, 0.4);
+            z-index: 260;
+        }
+
+        #sidebar-more-menu.open {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .sidebar-more-item {
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 8px 10px;
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .sidebar-more-item:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .btn {
             width: 44px;
             height: 44px;
-            margin-bottom: 8px;
+            margin-bottom: 0;
             cursor: pointer;
             border-radius: 12px;
             display: flex;
@@ -156,22 +230,8 @@
             fill: currentColor;
         }
 
-        .divider {
-            width: 28px;
-            height: 1px;
-            background: rgba(255, 255, 255, 0.1);
-            margin: 8px 0;
-            flex-shrink: 0;
-        }
-
-        .spacer {
-            flex: 1;
-        }
-
-        /* Pin/Unpin Visual feedback */
-        #btn-pin.active {
-            color: #667eea;
-            background: rgba(102, 126, 234, 0.15);
+        #btn-mapper {
+            margin-top: 10px;
         }
 
         /* Status Overlay */
@@ -192,7 +252,7 @@
         }
 
         /* IME Input Bar */
-        #ime-bar {
+        #ime-container {
             position: absolute;
             bottom: 0;
             left: 0;
@@ -208,7 +268,7 @@
             z-index: 20;
         }
 
-        #ime-bar.visible {
+        #ime-container.visible {
             transform: translateY(0);
         }
 
@@ -244,45 +304,6 @@
             transform: scale(1.02);
             box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
         }
-
-        /* IME Floating Container (inline styles moved here) */
-        #ime-container {
-            display: none;
-            position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(20, 20, 30, 0.9);
-            padding: 10px;
-            border-radius: 12px;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            z-index: 50;
-        }
-
-        #ime-container #ime-input {
-            background: #f0f0f5;
-            border: none;
-            color: #1a1a1a;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 16px;
-            outline: none;
-            margin-right: 10px;
-            width: 250px;
-        }
-
-        #ime-container #btn-send {
-            padding: 10px 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: 600;
-        }
-
-
 
         /* Loading Overlay */
         #loading-overlay {
@@ -354,18 +375,4 @@
             user-select: none;
             text-transform: uppercase;
             backdrop-filter: blur(4px);
-        }
-
-        /* Tooltips */
-        .btn[title]:hover::after {
-            content: attr(title);
-            position: absolute;
-            right: 64px;
-            background: rgba(0, 0, 0, 0.85);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
-            font-size: 12px;
-            white-space: nowrap;
-            pointer-events: none;
         }

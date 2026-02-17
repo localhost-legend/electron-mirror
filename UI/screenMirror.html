@@ -9,8 +9,11 @@
 
 <body>
     <div id="app">
-        <!-- Sidebar Trigger Zone (for hover detection) -->
-        <div id="sidebar-trigger"></div>
+        <button id="sidebar-edge-trigger" title="展開側邊欄" aria-label="展開側邊欄">
+            <svg viewBox="0 0 24 24">
+                <path d="M10 6l6 6-6 6z" />
+            </svg>
+        </button>
 
         <!-- Video Container -->
         <div id="video-container">
@@ -31,18 +34,17 @@
         </div>
 
         <div id="sidebar">
-            <button class="btn" id="btn-pin" title="切換側邊欄模式">
+            <button class="btn" id="btn-sidebar-toggle" title="收合側邊欄">
                 <svg viewBox="0 0 24 24">
-                    <path d="M16 12V4h1V2H7v2h1v8l-2 2v2h5v6l1 1 1-1v-6h5v-2l-2-2z" />
+                    <path d="M14 6l-6 6 6 6z" />
                 </svg>
             </button>
-            <div class="divider"></div>
+
             <button class="btn" id="btn-return-overview" title="檢視資訊">
                 <svg viewBox="0 0 24 24">
                     <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
                 </svg>
             </button>
-            <div class="divider"></div>
             <!-- Navigation -->
             <button class="btn" id="btn-back" title="返回">
                 <svg viewBox="0 0 24 24">
@@ -62,8 +64,6 @@
                 </svg>
             </button>
 
-            <div class="divider"></div>
-
             <!-- Keyboard -->
             <button class="btn" id="btn-keyboard" title="鍵盤">
                 <svg viewBox="0 0 24 24">
@@ -72,8 +72,6 @@
                 </svg>
             </button>
 
-            <div class="spacer"></div>
-
             <!-- Key Mapper -->
             <button class="btn" id="btn-mapper" title="按鍵映射">
                 <svg viewBox="0 0 24 24">
@@ -81,8 +79,6 @@
                         d="M21 6H3c-1.1 0-2 .9-2 2v8c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zm-10 7H8v3H6v-3H3v-2h3V8h2v3h3v2zm4.5 2c-.83 0-1.5-.67-1.5-1.5s.67-1.5 1.5-1.5 1.5.67 1.5 1.5-.67 1.5-1.5 1.5zm4-3c-.83 0-1.5-.67-1.5-1.5S18.67 9 19.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z" />
                 </svg>
             </button>
-
-            <div class="divider"></div>
 
             <!-- Volume -->
             <button class="btn" id="btn-vol-up" title="音量+">
@@ -98,9 +94,26 @@
                         d="M18.5 12c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM5 9v6h4l5 5V4L9 9H5z" />
                 </svg>
             </button>
+
+            <button class="btn" id="btn-sidebar-more" title="更多功能">
+                <svg viewBox="0 0 24 24">
+                    <path d="M12 8a2 2 0 1 0 0.001 0zM12 14a2 2 0 1 0 0.001 0zM12 20a2 2 0 1 0 0.001 0z" />
+                </svg>
+            </button>
+        </div>
+        <div id="sidebar-more-menu">
+            <button class="sidebar-more-item" data-target="btn-return-overview">檢視資訊</button>
+            <button class="sidebar-more-item" data-target="btn-back">返回</button>
+            <button class="sidebar-more-item" data-target="btn-home">主畫面</button>
+            <button class="sidebar-more-item" data-target="btn-recent">最近應用</button>
+            <button class="sidebar-more-item" data-target="btn-keyboard">鍵盤</button>
+            <button class="sidebar-more-item" data-target="btn-mapper">按鍵映射</button>
+            <button class="sidebar-more-item" data-target="btn-vol-up">音量+</button>
+            <button class="sidebar-more-item" data-target="btn-vol-down">音量-</button>
         </div>
 
         <script src="../main/renderer.js"></script>
+    </div>
 </body>
 
 </html>

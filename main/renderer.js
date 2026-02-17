@@ -66,6 +66,9 @@ async function initDecoder() {
                 canvas.width = frame.displayWidth;
                 canvas.height = frame.displayHeight;
                 ipcRenderer.send('set-aspect-ratio', frame.displayWidth, frame.displayHeight);
+                if (firstFrame) {
+                    markStreamReady();
+                }
                 firstFrame = false;
             }
             ctx.drawImage(frame, 0, 0);
@@ -494,74 +497,220 @@ function injectClipboardPaste(text) {
     ws.send(buffer);
 }
 
-// --- Unified Sidebar Logic ---
+// --- Stable Sidebar Logic (No Hover) ---
+const app = document.getElementById('app');
+const btnSidebarToggle = document.getElementById('btn-sidebar-toggle');
+const sidebarEdgeTrigger = document.getElementById('sidebar-edge-trigger');
 const sidebar = document.getElementById('sidebar');
-const sidebarTrigger = document.getElementById('sidebar-trigger');
-const btnPin = document.getElementById('btn-pin');
+const btnSidebarMore = document.getElementById('btn-sidebar-more');
+const sidebarMoreMenu = document.getElementById('sidebar-more-menu');
+const SIDEBAR_WIDTH = 56;
 
-const SidebarMode = {
-    PINNED: 'pinned',     // Always visible, pushes content
-    FLOATING: 'floating'  // Auto-hide, overlays content on hover
-};
+let isStreamReady = false;
+let isSidebarOpen = true;
+let isSidebarCompact = false;
+let hasSidebarHiddenActions = false;
+let lastSidebarWidth = -1;
 
-let currentSidebarMode = SidebarMode.PINNED;
-let isFullscreen = false;
-
-function setSidebarMode(mode) {
-    currentSidebarMode = mode;
-
-    // Clear state classes
-    sidebar.classList.remove('pinned', 'floating', 'revealed');
-
-    if (mode === SidebarMode.PINNED) {
-        sidebar.classList.add('pinned');
-        if (btnPin) {
-            btnPin.classList.add('active');
-            btnPin.title = "切換為自動隱藏 (懸浮)";
-        }
-    } else {
-        sidebar.classList.add('floating');
-        if (btnPin) {
-            btnPin.classList.remove('active');
-            btnPin.title = "切換為常駐顯示 (釘選)";
-        }
+function closeSidebarMoreMenu() {
+    if (sidebarMoreMenu) {
+        sidebarMoreMenu.classList.remove('open');
     }
 }
 
-// Hover Detection (Trigger Reveal)
-if (sidebarTrigger) {
-    sidebarTrigger.addEventListener('mouseenter', () => {
-        if (currentSidebarMode === SidebarMode.FLOATING) {
-            sidebar.classList.add('revealed');
-        }
-    });
+function openSidebarMoreMenu() {
+    if (!app || !btnSidebarMore || !sidebarMoreMenu) return;
+    syncSidebarMoreMenuItems();
+
+    sidebarMoreMenu.classList.add('open');
+    const appRect = app.getBoundingClientRect();
+    const btnRect = btnSidebarMore.getBoundingClientRect();
+    const menuRect = sidebarMoreMenu.getBoundingClientRect();
+
+    const gap = 8;
+    const minMargin = 8;
+
+    let left = btnRect.left - appRect.left - menuRect.width - gap;
+    let top = btnRect.bottom - appRect.top - menuRect.height;
+
+    left = Math.max(minMargin, Math.min(left, appRect.width - menuRect.width - minMargin));
+    top = Math.max(minMargin, Math.min(top, appRect.height - menuRect.height - minMargin));
+
+    sidebarMoreMenu.style.left = `${left}px`;
+    sidebarMoreMenu.style.top = `${top}px`;
 }
 
-// Hide when leaving sidebar area
-if (sidebar) {
-    sidebar.addEventListener('mouseleave', () => {
-        if (currentSidebarMode === SidebarMode.FLOATING) {
-            sidebar.classList.remove('revealed');
-        }
-    });
+function setSidebarCompact(compact) {
+    isSidebarCompact = !!compact;
+    if (sidebar) {
+        sidebar.classList.toggle('compact', isSidebarCompact);
+    }
+    if (!isSidebarCompact) {
+        closeSidebarMoreMenu();
+    }
 }
 
-// Pin/Unpin Toggle (Unified Control)
-if (btnPin) {
-    btnPin.addEventListener('click', (e) => {
+function getSidebarOverflowCandidates() {
+    if (!sidebar) return [];
+    return Array.from(sidebar.querySelectorAll(':scope > .btn:not(#btn-sidebar-toggle):not(#btn-sidebar-more)'));
+}
+
+function clearSidebarOverflowHidden() {
+    for (const el of getSidebarOverflowCandidates()) {
+        el.classList.remove('overflow-hidden');
+    }
+}
+
+function syncSidebarMoreMenuItems() {
+    if (!sidebarMoreMenu) return;
+    hasSidebarHiddenActions = false;
+    const items = sidebarMoreMenu.querySelectorAll('.sidebar-more-item');
+    for (const item of items) {
+        const targetId = item.getAttribute('data-target');
+        const targetButton = targetId ? document.getElementById(targetId) : null;
+        if (!targetButton) {
+            item.style.display = 'none';
+            continue;
+        }
+        const isHidden = targetButton.classList.contains('overflow-hidden');
+        if (isHidden) hasSidebarHiddenActions = true;
+        item.style.display = isHidden ? '' : 'none';
+    }
+    if (sidebar) {
+        sidebar.classList.toggle('has-hidden-actions', hasSidebarHiddenActions);
+    }
+    if (!hasSidebarHiddenActions) {
+        closeSidebarMoreMenu();
+    }
+}
+
+function updateSidebarCompactMode() {
+    if (!sidebar || !isStreamReady || !isSidebarOpen) {
+        clearSidebarOverflowHidden();
+        setSidebarCompact(false);
+        syncSidebarMoreMenuItems();
+        return;
+    }
+
+    clearSidebarOverflowHidden();
+    sidebar.classList.remove('compact');
+
+    if (sidebar.scrollHeight <= sidebar.clientHeight + 1) {
+        setSidebarCompact(false);
+        syncSidebarMoreMenuItems();
+        return;
+    }
+
+    setSidebarCompact(true);
+    const overflowCandidates = getSidebarOverflowCandidates();
+    for (let i = overflowCandidates.length - 1; i >= 0; i--) {
+        if (sidebar.scrollHeight <= sidebar.clientHeight + 1) break;
+        overflowCandidates[i].classList.add('overflow-hidden');
+    }
+    syncSidebarMoreMenuItems();
+}
+
+function applySidebarState() {
+    if (!app) return;
+
+    const effectiveSidebarOpen = isStreamReady && isSidebarOpen;
+
+    app.classList.toggle('stream-ready', isStreamReady);
+    app.classList.toggle('sidebar-open', effectiveSidebarOpen);
+
+    if (btnSidebarToggle) {
+        btnSidebarToggle.title = effectiveSidebarOpen ? "收合側邊欄" : "展開側邊欄";
+        btnSidebarToggle.setAttribute('aria-label', effectiveSidebarOpen ? "收合側邊欄" : "展開側邊欄");
+    }
+
+    if (sidebarEdgeTrigger) {
+        sidebarEdgeTrigger.title = "展開側邊欄";
+        sidebarEdgeTrigger.setAttribute('aria-label', "展開側邊欄");
+    }
+    if (btnSidebarMore) {
+        btnSidebarMore.title = "更多功能";
+        btnSidebarMore.setAttribute('aria-label', "更多功能");
+    }
+
+    const sidebarWidth = effectiveSidebarOpen ? SIDEBAR_WIDTH : 0;
+    if (sidebarWidth !== lastSidebarWidth) {
+        lastSidebarWidth = sidebarWidth;
+        ipcRenderer.send('resize-window', sidebarWidth);
+    }
+
+    if (!effectiveSidebarOpen) {
+        clearSidebarOverflowHidden();
+        setSidebarCompact(false);
+    }
+
+    requestAnimationFrame(updateSidebarCompactMode);
+}
+
+function toggleSidebar() {
+    isSidebarOpen = !isSidebarOpen;
+    applySidebarState();
+}
+
+if (btnSidebarToggle) {
+    btnSidebarToggle.addEventListener('click', (e) => {
         e.stopPropagation();
-        const nextMode = (currentSidebarMode === SidebarMode.PINNED) ? SidebarMode.FLOATING : SidebarMode.PINNED;
-        setSidebarMode(nextMode);
+        toggleSidebar();
     });
 }
 
-// Fullscreen adaptation (Optional: could force floating in FS, but let's trust user preference)
-ipcRenderer.on('fullscreen-change', (event, full) => {
-    isFullscreen = full;
-    // UI can adapt here if needed, but current unified logic handles both window/FS
+if (sidebarEdgeTrigger) {
+    sidebarEdgeTrigger.addEventListener('click', () => {
+        if (isStreamReady && !isSidebarOpen) {
+            isSidebarOpen = true;
+            applySidebarState();
+        }
+    });
+}
+
+if (btnSidebarMore) {
+    btnSidebarMore.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!isSidebarCompact || !hasSidebarHiddenActions || !sidebarMoreMenu) return;
+        if (sidebarMoreMenu.classList.contains('open')) {
+            closeSidebarMoreMenu();
+            return;
+        }
+        openSidebarMoreMenu();
+    });
+}
+
+if (sidebarMoreMenu) {
+    sidebarMoreMenu.addEventListener('click', (e) => {
+        const item = e.target.closest('.sidebar-more-item');
+        if (!item) return;
+        const targetId = item.getAttribute('data-target');
+        if (!targetId) return;
+        const targetButton = document.getElementById(targetId);
+        if (targetButton) targetButton.click();
+        closeSidebarMoreMenu();
+    });
+}
+
+document.addEventListener('click', (e) => {
+    if (!sidebarMoreMenu || !sidebarMoreMenu.classList.contains('open')) return;
+    if (sidebarMoreMenu.contains(e.target) || (btnSidebarMore && btnSidebarMore.contains(e.target))) return;
+    closeSidebarMoreMenu();
 });
 
-// Initialize
-setSidebarMode(SidebarMode.PINNED);
+window.addEventListener('resize', () => {
+    if (sidebarMoreMenu && sidebarMoreMenu.classList.contains('open')) {
+        openSidebarMoreMenu();
+    }
+    if (!isStreamReady || !isSidebarOpen) return;
+    requestAnimationFrame(updateSidebarCompactMode);
+});
+
+function markStreamReady() {
+    if (isStreamReady) return;
+    isStreamReady = true;
+    applySidebarState();
+}
+
+applySidebarState();
 
 start();

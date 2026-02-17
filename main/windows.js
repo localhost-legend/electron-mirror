@@ -113,8 +113,9 @@ function snapWindowToRatio() {
     const chromeWidth = wW - cW;
 
     const videoRatio = state.currentVideoRatio || (9 / 16);
+    const sidebarWidth = Math.max(0, state.currentSidebarWidth || 0);
 
-    const targetContentWidth = Math.round(cH * videoRatio);
+    const targetContentWidth = Math.round(cH * videoRatio) + sidebarWidth;
     const targetWindowWidth = targetContentWidth + chromeWidth;
 
     if (Math.abs(wW - targetWindowWidth) > 2) {
@@ -134,13 +135,16 @@ function updateWindowAspectRatio() {
     const chromeHeight = wH - cH;
 
     const videoRatio = state.currentVideoRatio || (9 / 16);
+    const sidebarWidth = Math.max(0, state.currentSidebarWidth || 0);
 
-    const targetContentWidth = Math.max(1, Math.round(cH * videoRatio));
+    const targetContentWidth = Math.max(1, Math.round(cH * videoRatio) + sidebarWidth);
     const targetWindowWidth = targetContentWidth + chromeWidth;
     const targetWindowHeight = cH + chromeHeight;
 
-    const targetRatio = targetWindowWidth / targetWindowHeight;
-    mainWindow.setAspectRatio(targetRatio);
+    mainWindow.setAspectRatio(videoRatio, {
+        width: chromeWidth + sidebarWidth,
+        height: chromeHeight
+    });
 
     if (Math.abs(wW - targetWindowWidth) > 2) {
         mainWindow.setSize(targetWindowWidth, wH);
