@@ -13,6 +13,7 @@ let statsTimer = null;
 let videoBytes = 0;
 let audioBytes = 0;
 let videoFrames = 0;
+const ENABLE_STATS_LOG = process.env.SCRCPY_STATS === '1';
 
 // Video States
 const V_DUMMY = 0, V_DEVICE_NAME = 1, V_CODEC_META = 2, V_HEADER = 3, V_PAYLOAD = 4;
@@ -173,7 +174,7 @@ function connectSockets(port) {
             const audioKbps = Math.round((audioBytes * 8) / 1000);
             const fps = videoFrames;
 
-            if (videoKbps || audioKbps || fps) {
+            if (ENABLE_STATS_LOG && (videoKbps || audioKbps || fps)) {
                 console.log(`[Stats] in=${videoKbps}kbps video, ${audioKbps}kbps audio, packets_fps=${fps}`);
             }
 
