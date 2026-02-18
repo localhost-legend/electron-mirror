@@ -1,6 +1,7 @@
 # Dependency directories
 node_modules/
 scrcpy-win64-v3.3.4
+devices.json
 
 # macOS metadata
 .DS_Store

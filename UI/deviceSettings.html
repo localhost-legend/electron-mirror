@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Device Settings</title>
+    <link rel="stylesheet" href="deviceSettings.css">
+</head>
+
+<body>
+    <header>
+        <div class="title">Device Settings</div>
+        <div class="subtitle" id="deviceSubtitle">--</div>
+    </header>
+
+    <main>
+        <section class="section">
+            <div class="section-title">基本資訊</div>
+            <div class="field">
+                <label>裝置別名</label>
+                <input type="text" id="aliasInput" placeholder="輸入裝置別名">
+            </div>
+            <div class="field">
+                <label>序號</label>
+                <div class="static" id="serialText">--</div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-title">影像設定</div>
+            <div class="field">
+                <label>最大 FPS</label>
+                <input type="number" id="maxFpsInput" min="1" max="120" step="1">
+            </div>
+            <div class="field">
+                <label>解析度比例</label>
+                <div class="range-row">
+                    <input type="range" id="sizePercentInput" min="25" max="100" step="1">
+                    <div class="range-value" id="sizePercentValue">100%</div>
+                </div>
+                <div class="hint" id="sizePercentHint">裝置原生解析度：--</div>
+            </div>
+            <div class="field">
+                <label>碼率 (Mbps, 0 = 自動)</label>
+                <input type="number" id="bitRateInput" min="0" max="50" step="0.5">
+                <div class="hint">設定後需重新啟動投射才會生效。</div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <button class="btn" id="btn-cancel">取消</button>
+        <button class="btn btn-primary" id="btn-save">儲存</button>
+    </footer>
+
+    <script src="deviceSettings.js"></script>
+</body>
+
+</html>
