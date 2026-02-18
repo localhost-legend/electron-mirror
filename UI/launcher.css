@@ -203,6 +203,12 @@ footer {
   align-items: center;
 }
 
+.footer-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .btn-refresh {
   background: transparent;
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -223,6 +229,23 @@ footer {
   border-color: rgba(255, 255, 255, 0.3);
 }
 
+.btn-menu {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.04);
+  color: #cfcfe6;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn-menu:hover {
+  border-color: rgba(255, 255, 255, 0.3);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .btn-refresh svg {
   width: 14px;
   height: 14px;
@@ -232,6 +255,187 @@ footer {
 .version {
   font-size: 11px;
   color: #444;
+}
+
+.launcher-menu {
+  position: fixed;
+  min-width: 240px;
+  background: rgba(18, 18, 26, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  display: none;
+  z-index: 998;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.launcher-menu.open {
+  display: block;
+}
+
+.launcher-menu.no-scroll {
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.launcher-menu.no-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+.menu-section {
+  padding: 6px 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.menu-section:first-child {
+  border-top: none;
+}
+
+.menu-title {
+  font-size: 11px;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 8px;
+}
+
+.menu-item {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menu-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  padding: 6px 4px;
+}
+
+.menu-toggle input {
+  accent-color: #667eea;
+}
+
+.menu-inline {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 6px 4px 10px;
+}
+
+.menu-inline-title {
+  font-size: 12px;
+  color: #bbb;
+  margin-bottom: 2px;
+}
+
+.menu-inline input {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 8px;
+  color: #fff;
+  padding: 8px 10px;
+  font-size: 13px;
+  outline: none;
+}
+
+.menu-inline-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.menu-item.action {
+  text-align: center;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.menu-item.action:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.menu-item.action.back {
+  margin: 6px 4px 0;
+}
+
+.menu-sublist {
+  margin: 6px 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.menu-sublist-title {
+  font-size: 12px;
+  color: #bbb;
+  margin-bottom: 2px;
+}
+
+.menu-sublist .menu-item {
+  font-size: 12px;
+}
+
+.launcher-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.launcher-menu::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.launcher-menu::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 999px;
+}
+
+.launcher-menu.add-device-only .menu-debug {
+  display: none;
+}
+
+.launcher-menu.add-device-only .menu-device > .menu-title,
+.launcher-menu.add-device-only .menu-device > .menu-item[data-action="add-device"],
+.launcher-menu.add-device-only .menu-device > .menu-item[data-action="toggle-hidden"],
+.launcher-menu.add-device-only .menu-device > .menu-sublist {
+  display: none;
+}
+
+.launcher-menu.hidden-only .menu-debug {
+  display: none;
+}
+
+.launcher-menu.hidden-only .menu-device > .menu-title,
+.launcher-menu.hidden-only .menu-device > .menu-item[data-action="add-device"],
+.launcher-menu.hidden-only .menu-device > .menu-inline,
+.launcher-menu.hidden-only .menu-device > .menu-item[data-action="toggle-hidden"] {
+  display: none;
+}
+
+
+.menu-empty {
+  font-size: 12px;
+  color: #666;
+  padding: 4px 2px;
+}
+
+.hidden {
+  display: none;
 }
 
 .context-menu {

@@ -31,7 +31,10 @@
             </svg>
             重新整理
         </button>
-        <div class="version">v1.0.0</div>
+        <div class="footer-actions">
+            <button class="btn-menu" id="launcher-menu-button" aria-label="Menu">⋯</button>
+            <div class="version">v1.0.0</div>
+        </div>
     </footer>
 
     <div class="toast" id="toast"></div>
@@ -39,6 +42,33 @@
     <div id="device-context-menu" class="context-menu">
         <button class="context-item" data-action="rename">重新命名</button>
         <button class="context-item" data-action="settings">開啟設定</button>
+        <button class="context-item" data-action="hide">從清單隱藏</button>
+        <button class="context-item" data-action="disconnect">完全斷線</button>
+    </div>
+
+    <div id="launcher-menu" class="launcher-menu">
+        <div class="menu-section menu-debug">
+            <div class="menu-title">除錯</div>
+            <label class="menu-toggle">
+                <input type="checkbox" id="toggle-stats">
+                <span>輸出 SCRCPY Stats</span>
+            </label>
+        </div>
+        <div class="menu-section menu-device">
+            <div class="menu-title">裝置</div>
+            <button class="menu-item" data-action="add-device">新增裝置</button>
+            <div class="menu-inline hidden" id="add-device-form">
+                <div class="menu-inline-title">新增裝置</div>
+                <input type="text" id="add-device-input" placeholder="ip:port 或 ip (預設 5555)">
+                <div class="menu-inline-actions">
+                    <button class="menu-item action" data-action="confirm-add">連線</button>
+                    <button class="menu-item action" data-action="cancel-add">返回</button>
+                </div>
+            </div>
+            <button class="menu-item" data-action="toggle-hidden">復原隱藏的裝置</button>
+            <div class="menu-sublist hidden" id="hidden-device-list"></div>
+            <button class="menu-item action hidden" data-action="back-hidden" id="hidden-back">返回</button>
+        </div>
     </div>
 
     <script src="launcher.js"></script>

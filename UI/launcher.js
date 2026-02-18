@@ -16,6 +16,13 @@ let isDownloadingScrcpy = false;
 let isAdbReady = false;
 let contextDevice = null;
 let contextMenu = null;
+let launcherMenu = null;
+let launcherMenuButton = null;
+let hiddenListEl = null;
+let addDeviceForm = null;
+let addDeviceInput = null;
+let toggleStats = null;
+let hiddenBackButton = null;
 
 contextMenu = document.getElementById('device-context-menu');
 if (contextMenu) {
@@ -32,9 +39,100 @@ if (contextMenu) {
     });
 }
 
+launcherMenu = document.getElementById('launcher-menu');
+launcherMenuButton = document.getElementById('launcher-menu-button');
+hiddenListEl = document.getElementById('hidden-device-list');
+addDeviceForm = document.getElementById('add-device-form');
+addDeviceInput = document.getElementById('add-device-input');
+toggleStats = document.getElementById('toggle-stats');
+hiddenBackButton = document.getElementById('hidden-back');
+
+if (launcherMenuButton) {
+    launcherMenuButton.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (!launcherMenu) return;
+        if (launcherMenu.classList.contains('open')) {
+            closeLauncherMenu();
+        } else {
+            openLauncherMenu();
+        }
+    });
+}
+
+if (launcherMenu) {
+    launcherMenu.addEventListener('click', async (e) => {
+        const item = e.target.closest('[data-action]');
+        if (!item) return;
+        e.stopPropagation();
+        const action = item.getAttribute('data-action');
+        const serial = item.getAttribute('data-serial');
+        await handleLauncherMenuAction(action, serial);
+    });
+}
+
+if (toggleStats) {
+    toggleStats.addEventListener('change', async () => {
+        await ipcRenderer.invoke('set-debug-stats', toggleStats.checked);
+    });
+}
+
+if (addDeviceInput) {
+    addDeviceInput.addEventListener('keydown', async (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            await handleLauncherMenuAction('confirm-add');
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            await handleLauncherMenuAction('cancel-add');
+        }
+    });
+}
+
 function closeContextMenu() {
     if (contextMenu) contextMenu.classList.remove('open');
     contextDevice = null;
+}
+
+function closeLauncherMenu() {
+    if (launcherMenu) {
+        launcherMenu.classList.remove('open');
+        launcherMenu.classList.remove('add-device-only');
+        launcherMenu.classList.remove('hidden-only');
+        launcherMenu.classList.remove('no-scroll');
+    }
+    if (addDeviceForm) addDeviceForm.classList.add('hidden');
+    if (hiddenListEl) hiddenListEl.classList.add('hidden');
+    if (hiddenBackButton) hiddenBackButton.classList.add('hidden');
+}
+
+function updateLauncherMenuLayout() {
+    if (!launcherMenu || !launcherMenuButton) return;
+    if (!launcherMenu.classList.contains('open')) return;
+
+    const maxHeight = Math.max(120, window.innerHeight - 16);
+    launcherMenu.style.maxHeight = `${maxHeight}px`;
+    launcherMenu.style.height = 'auto';
+    launcherMenu.style.overflowY = 'auto';
+
+    const rect = launcherMenuButton.getBoundingClientRect();
+    const menuRect = launcherMenu.getBoundingClientRect();
+    const menuWidth = menuRect.width || 240;
+    const menuHeight = Math.min(launcherMenu.scrollHeight, maxHeight);
+    launcherMenu.style.height = `${menuHeight}px`;
+
+    const needsScroll = launcherMenu.scrollHeight > menuHeight + 1;
+    launcherMenu.classList.toggle('no-scroll', !needsScroll);
+    launcherMenu.style.overflowY = needsScroll ? 'auto' : 'hidden';
+
+    const left = Math.min(rect.right - menuWidth, window.innerWidth - menuWidth - 8);
+    const spaceAbove = rect.top - 8;
+    const spaceBelow = window.innerHeight - rect.bottom - 8;
+    const preferDown = spaceBelow >= menuHeight || spaceBelow >= spaceAbove;
+    const top = preferDown
+        ? Math.min(rect.bottom + 8, window.innerHeight - menuHeight - 8)
+        : Math.max(8, rect.top - menuHeight - 8);
+    launcherMenu.style.left = `${Math.max(8, left)}px`;
+    launcherMenu.style.top = `${Math.max(8, top)}px`;
 }
 
 function openContextMenu(x, y, device) {
@@ -52,6 +150,18 @@ function openContextMenu(x, y, device) {
 
     contextMenu.style.left = `${Math.max(8, left)}px`;
     contextMenu.style.top = `${Math.max(8, top)}px`;
+
+}
+
+function openLauncherMenu() {
+    if (!launcherMenu || !launcherMenuButton) return;
+    launcherMenu.classList.remove('add-device-only');
+    launcherMenu.classList.remove('hidden-only');
+    launcherMenu.classList.add('open');
+    updateLauncherMenuLayout();
+
+    refreshHiddenList();
+    refreshDebugOptions();
 }
 
 async function loadDevices() {
@@ -171,6 +281,111 @@ function showToast(message) {
     setTimeout(() => toast.classList.remove('visible'), 3000);
 }
 
+async function refreshDebugOptions() {
+    if (!toggleStats) return;
+    try {
+        const options = await ipcRenderer.invoke('get-debug-options');
+        toggleStats.checked = !!options?.statsEnabled;
+    } catch (e) {
+        toggleStats.checked = false;
+    }
+}
+
+async function refreshHiddenList() {
+    if (!hiddenListEl) return;
+    try {
+        const showHiddenMode = launcherMenu && launcherMenu.classList.contains('hidden-only');
+        const hidden = await ipcRenderer.invoke('get-hidden-devices');
+        const header = `<div class="menu-sublist-title">復原隱藏的裝置</div>`;
+        if (!hidden || hidden.length === 0) {
+            hiddenListEl.innerHTML = `${header}<div class="menu-empty">沒有隱藏裝置</div>`;
+            if (hiddenBackButton) {
+                hiddenBackButton.classList.toggle('hidden', !showHiddenMode);
+            }
+            updateLauncherMenuLayout();
+            return;
+        }
+        hiddenListEl.innerHTML = header + hidden.map((entry) => {
+            const label = entry.alias || entry.model || entry.serial;
+            const serialAttr = encodeURIComponent(entry.serial);
+            return `<button class="menu-item" data-action="restore-hidden" data-serial="${serialAttr}">${label}</button>`;
+        }).join('');
+        if (hiddenBackButton) {
+            hiddenBackButton.classList.toggle('hidden', !showHiddenMode);
+        }
+        updateLauncherMenuLayout();
+    } catch (e) {
+        hiddenListEl.innerHTML = `<div class="menu-sublist-title">復原隱藏的裝置</div><div class="menu-empty">讀取失敗</div>`;
+        if (hiddenBackButton) {
+            const showHiddenMode = launcherMenu && launcherMenu.classList.contains('hidden-only');
+            hiddenBackButton.classList.toggle('hidden', !showHiddenMode);
+        }
+        updateLauncherMenuLayout();
+    }
+}
+
+async function handleLauncherMenuAction(action, serial) {
+    if (action === 'add-device') {
+        if (launcherMenu) {
+            launcherMenu.classList.add('add-device-only');
+            launcherMenu.classList.remove('hidden-only');
+        }
+        if (addDeviceForm) addDeviceForm.classList.remove('hidden');
+        if (addDeviceInput) {
+            addDeviceInput.focus();
+            addDeviceInput.select();
+        }
+        updateLauncherMenuLayout();
+        return;
+    }
+    if (action === 'confirm-add') {
+        const target = addDeviceInput ? addDeviceInput.value.trim() : '';
+        if (!target) {
+            showToast('請輸入裝置位址');
+            return;
+        }
+        const result = await ipcRenderer.invoke('adb-connect', target);
+        showToast(result?.message || (result?.ok ? '連線完成' : '連線失敗'));
+        if (result?.ok && addDeviceInput) {
+            addDeviceInput.value = '';
+            addDeviceInput.focus();
+        }
+        if (result?.ok) loadDevices();
+        return;
+    }
+    if (action === 'cancel-add') {
+        if (launcherMenu) launcherMenu.classList.remove('add-device-only');
+        if (addDeviceForm) addDeviceForm.classList.add('hidden');
+        updateLauncherMenuLayout();
+        return;
+    }
+    if (action === 'toggle-hidden') {
+        if (launcherMenu) {
+            launcherMenu.classList.add('hidden-only');
+            launcherMenu.classList.remove('add-device-only');
+        }
+        if (hiddenListEl) hiddenListEl.classList.remove('hidden');
+        if (hiddenBackButton) hiddenBackButton.classList.remove('hidden');
+        refreshHiddenList();
+        updateLauncherMenuLayout();
+        return;
+    }
+    if (action === 'back-hidden') {
+        if (launcherMenu) launcherMenu.classList.remove('hidden-only');
+        if (hiddenListEl) hiddenListEl.classList.add('hidden');
+        if (hiddenBackButton) hiddenBackButton.classList.add('hidden');
+        updateLauncherMenuLayout();
+        return;
+    }
+    if (action === 'restore-hidden' && serial) {
+        const resolvedSerial = decodeURIComponent(serial);
+        await ipcRenderer.invoke('set-device-hidden', resolvedSerial, false);
+        refreshHiddenList();
+        loadDevices();
+        return;
+    }
+}
+
 ipcRenderer.on('connection-failed', (event, error) => {
     showToast(`連線失敗：${error}`);
     loadDevices(); // Reload to reset UI
@@ -218,12 +433,22 @@ ipcRenderer.on('scrcpy-status-changed', (event, status) => {
 window.loadDevices = loadDevices;
 
 document.addEventListener('click', (e) => {
-    if (!contextMenu || !contextMenu.classList.contains('open')) return;
-    if (contextMenu.contains(e.target)) return;
-    closeContextMenu();
+    if (contextMenu && contextMenu.classList.contains('open')) {
+        if (!contextMenu.contains(e.target)) {
+            closeContextMenu();
+        }
+    }
+    if (launcherMenu && launcherMenu.classList.contains('open')) {
+        if (!launcherMenu.contains(e.target) && e.target !== launcherMenuButton) {
+            closeLauncherMenu();
+        }
+    }
 });
 
-window.addEventListener('resize', () => closeContextMenu());
+window.addEventListener('resize', () => {
+    closeContextMenu();
+    closeLauncherMenu();
+});
 
 async function handleContextAction(action) {
     if (!contextDevice) return;
@@ -231,6 +456,14 @@ async function handleContextAction(action) {
         startInlineRename(contextDevice.serial, contextDevice.alias || '');
     } else if (action === 'settings') {
         ipcRenderer.send('open-device-settings', { serial: contextDevice.serial });
+    } else if (action === 'hide') {
+        await ipcRenderer.invoke('set-device-hidden', contextDevice.serial, true);
+        ipcRenderer.send('refresh-device-list');
+        loadDevices();
+    } else if (action === 'disconnect') {
+        const result = await ipcRenderer.invoke('adb-disconnect', contextDevice.serial);
+        showToast(result?.message || (result?.ok ? '已斷線' : '斷線失敗'));
+        loadDevices();
     }
     closeContextMenu();
 }
@@ -284,4 +517,5 @@ function startInlineRename(serial, currentAlias) {
 // Initial load
 window.addEventListener('DOMContentLoaded', () => {
     refreshScrcpyStatus().finally(() => loadDevices());
+    refreshDebugOptions();
 });
