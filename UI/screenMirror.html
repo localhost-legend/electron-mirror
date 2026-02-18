@@ -45,6 +45,12 @@
                     <path d="M3 13h8V3H3v10zm0 8h8v-6H3v6zm10 0h8V11h-8v10zm0-18v6h8V3h-8z" />
                 </svg>
             </button>
+
+            <button class="btn" id="btn-device-settings" title="裝置設定">
+                <svg viewBox="0 0 24 24">
+                    <path d="M19.14 12.94c.04-.31.06-.63.06-.94s-.02-.63-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.6-.22l-2.39.96a7.06 7.06 0 0 0-1.63-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.58.23-1.12.53-1.63.94l-2.39-.96a.5.5 0 0 0-.6.22L2.81 8.84a.5.5 0 0 0 .12.64l2.03 1.58c-.04.31-.06.63-.06.94s.02.63.06.94l-2.03 1.58a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.6.22l2.39-.96c.51.41 1.05.71 1.63.94l.36 2.54c.05.24.26.42.5.42h3.84c.24 0 .45-.18.5-.42l.36-2.54c.58-.23 1.12-.53 1.63-.94l2.39.96c.22.09.47 0 .6-.22l1.92-3.32a.5.5 0 0 0-.12-.64l-2.03-1.58zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z" />
+                </svg>
+            </button>
             <!-- Navigation -->
             <button class="btn" id="btn-back" title="返回">
                 <svg viewBox="0 0 24 24">
@@ -103,6 +109,7 @@
         </div>
         <div id="sidebar-more-menu">
             <button class="sidebar-more-item" data-target="btn-return-overview">檢視資訊</button>
+            <button class="sidebar-more-item" data-target="btn-device-settings">裝置設定</button>
             <button class="sidebar-more-item" data-target="btn-back">返回</button>
             <button class="sidebar-more-item" data-target="btn-home">主畫面</button>
             <button class="sidebar-more-item" data-target="btn-recent">最近應用</button>
@@ -112,7 +119,7 @@
             <button class="sidebar-more-item" data-target="btn-vol-down">音量-</button>
         </div>
 
-        <script src="../main/renderer.js"></script>
+        <script src="screenMirror.js"></script>
     </div>
 </body>
 
