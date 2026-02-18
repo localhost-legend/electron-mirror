@@ -13,8 +13,9 @@ const defaultLuncherWindowOptions = {
     windowsetting: {
         width: 450,
         height: 600,
-        resizable: false,
+        resizable: true,
         title: 'Select Device',
+        backgroundColor: '#0f0f1a',
         webPreferences: {
             nodeIntegration: true,
             contextIsolation: false
@@ -47,6 +48,37 @@ function createOverviewWindow() {
     state.overviewWindow.loadFile(path.join(__dirname, '..', 'UI', 'overview.html'));
     state.overviewWindow.on('closed', () => {
         state.overviewWindow = null;
+    });
+}
+
+function createDeviceSettingsWindow({ serial, focus } = {}) {
+    if (state.settingsWindow && !state.settingsWindow.isDestroyed()) {
+        state.settingsWindow.loadFile(path.join(__dirname, '..', 'UI', 'deviceSettings.html'), {
+            query: serial ? { serial, focus: focus || undefined } : undefined
+        });
+        state.settingsWindow.show();
+        state.settingsWindow.focus();
+        return;
+    }
+
+    state.settingsWindow = new BrowserWindow({
+        width: 520,
+        height: 620,
+        resizable: false,
+        title: 'Device Settings',
+        backgroundColor: '#0f0f1a',
+        webPreferences: {
+            nodeIntegration: true,
+            contextIsolation: false
+        }
+    });
+
+    state.settingsWindow.loadFile(path.join(__dirname, '..', 'UI', 'deviceSettings.html'), {
+        query: serial ? { serial, focus: focus || undefined } : undefined
+    });
+
+    state.settingsWindow.on('closed', () => {
+        state.settingsWindow = null;
     });
 }
 
@@ -158,6 +190,7 @@ function updateWindowAspectRatio() {
 export {
     createLauncherWindow,
     createOverviewWindow,
+    createDeviceSettingsWindow,
     createMainWindow,
     snapWindowToRatio,
     updateWindowAspectRatio

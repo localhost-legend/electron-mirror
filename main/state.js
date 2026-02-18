@@ -2,6 +2,7 @@ export default {
     mainWindow: null,
     launcherWindow: null,
     overviewWindow: null,
+    settingsWindow: null,
     selectedSerial: null,
     selectedAlias: null,
     selectedModel: null,

@@ -2,8 +2,8 @@ import { app } from 'electron';
 import state from './state.js';
 import { getScrcpyConfig } from './config.js';
 import { checkForUpdates, downloadScrcpy } from './version-manager.js';
-import { createLauncherWindow, createOverviewWindow, createMainWindow, snapWindowToRatio, updateWindowAspectRatio } from './windows.js';
-import { initWebSocketServers, startScrcpy, stopScrcpy } from './scrcpy.js';
+import { createLauncherWindow, createOverviewWindow, createDeviceSettingsWindow, createMainWindow, snapWindowToRatio, updateWindowAspectRatio } from './windows.js';
+import { startScrcpy, stopScrcpy } from './services/scrcpy-service.js';
 import { registerIpcHandlers } from './ipc/handlers.js';
 import { startDeviceMonitor, clearTrackedDevice, setAdbPath, stopAdbServer,initAdb } from './adb.js';
 
@@ -110,8 +110,6 @@ async function initializeScrcpy() {
         state.isAdbReady = true;
         notifyScrcpyStatus();
 
-        initWebSocketServers();
-
         // Start device monitor - SAFE now because download/init is done
         startDeviceMonitorIfReady();
 
@@ -173,6 +171,7 @@ registerIpcHandlers({
     adbPath: () => scrcpyPaths?.ADB_PATH,
     launchScreenMirror,
     createOverviewWindow,
+    createDeviceSettingsWindow,
     snapWindowToRatio,
     updateWindowAspectRatio
 });
