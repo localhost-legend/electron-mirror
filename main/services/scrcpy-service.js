@@ -9,7 +9,6 @@ let videoBuffer = Buffer.alloc(0);
 let audioBuffer = Buffer.alloc(0);
 let rendererReady = false;
 let clipboardSequence = 0n;
-let loggedFirstVideoPacket = false;
 let statsTimer = null;
 let videoBytes = 0;
 let audioBytes = 0;
@@ -142,10 +141,6 @@ function connectSockets(port) {
         log('[Node] Video Socket Connected!');
 
         state.videoSocket.on('data', (d) => {
-            if (!loggedFirstVideoPacket) {
-                log(`[Node] First Video Packet: ${d.length} bytes`);
-                loggedFirstVideoPacket = true;
-            }
             videoBytes += d.length;
             videoBuffer = append(videoBuffer, d);
             parseVideo();
@@ -204,7 +199,6 @@ function stopScrcpy() {
     state.streamHistory = [];
     state.isScrcpyStarted = false;
     rendererReady = false;
-    loggedFirstVideoPacket = false;
     if (statsTimer) {
         clearInterval(statsTimer);
         statsTimer = null;
