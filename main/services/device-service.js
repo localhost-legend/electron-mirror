@@ -1,6 +1,6 @@
 import fs from 'fs';
 import nodePath from 'path';
-import { exec } from 'child_process';
+import { exec, execFile } from 'child_process';
 import state from '../state.js';
 import { client, setTrackedDevice, clearTrackedDevice } from '../adb.js';
 import { fileURLToPath } from 'url';
@@ -45,6 +45,7 @@ async function listDevices() {
         throw new Error('ADB_NOT_READY');
     }
     const devices = await client.listDevices();
+    let shouldSave = false;
     const enriched = await Promise.all(devices.map(async (d) => {
         let model = 'Unknown';
         try {
@@ -52,14 +53,28 @@ async function listDevices() {
             model = props['ro.product.model'] || 'Android Device';
         } catch (e) { }
 
-        let alias = null;
-        if (deviceConfig[d.id] && deviceConfig[d.id].alias) {
-            alias = deviceConfig[d.id].alias;
+        if (!deviceConfig[d.id]) {
+            deviceConfig[d.id] = {};
+            shouldSave = true;
         }
+
+        if (model && deviceConfig[d.id].model !== model) {
+            deviceConfig[d.id].model = model;
+            shouldSave = true;
+        }
+
+        if (deviceConfig[d.id].hidden) {
+            return null;
+        }
+
+        const alias = deviceConfig[d.id]?.alias || null;
 
         return { id: d.id, model, alias };
     }));
-    return enriched;
+    if (shouldSave) {
+        saveDeviceConfig();
+    }
+    return enriched.filter(Boolean);
 }
 
 async function connectDevice(payload, { launchScreenMirror }) {
@@ -112,6 +127,70 @@ function setDeviceAlias(serial, alias) {
         }
     }
     return true;
+}
+
+function setDeviceHidden(serial, hidden) {
+    if (!serial) return false;
+    if (!deviceConfig[serial]) deviceConfig[serial] = {};
+    deviceConfig[serial].hidden = !!hidden;
+    saveDeviceConfig();
+    return true;
+}
+
+function getHiddenDevices() {
+    loadDeviceConfig();
+    return Object.entries(deviceConfig)
+        .filter(([, entry]) => entry && entry.hidden)
+        .map(([serial, entry]) => ({
+            serial,
+            alias: entry.alias || null,
+            model: entry.model || null
+        }));
+}
+
+function looksLikeIp(target) {
+    return /^\d{1,3}(\.\d{1,3}){3}$/.test(target || '');
+}
+
+function normalizeAdbConnectTarget(target) {
+    const trimmed = String(target || '').trim();
+    if (!trimmed) return null;
+    if (trimmed.includes(':')) return trimmed;
+    return `${trimmed}:5555`;
+}
+
+function normalizeAdbDisconnectTarget(target) {
+    const trimmed = String(target || '').trim();
+    if (!trimmed) return null;
+    if (trimmed.includes(':')) return trimmed;
+    if (looksLikeIp(trimmed)) return `${trimmed}:5555`;
+    return trimmed;
+}
+
+function execAdb(getAdbPath, args) {
+    const adbPath = getAdbPath();
+    return new Promise((resolve) => {
+        execFile(adbPath, args, (err, stdout, stderr) => {
+            if (err) {
+                resolve({ ok: false, message: stderr?.trim() || err.message || 'adb failed' });
+                return;
+            }
+            resolve({ ok: true, message: stdout?.trim() || 'OK' });
+        });
+    });
+}
+
+async function adbConnect(getAdbPath, target) {
+    const resolved = normalizeAdbConnectTarget(target);
+    if (!resolved) return { ok: false, message: '請輸入裝置位址' };
+    return execAdb(getAdbPath, ['connect', resolved]);
+}
+
+async function adbDisconnect(getAdbPath, target) {
+    const args = ['disconnect'];
+    const resolved = normalizeAdbDisconnectTarget(target);
+    if (resolved) args.push(resolved);
+    return execAdb(getAdbPath, args);
 }
 
 function getDeviceSettings(serial) {
@@ -266,6 +345,10 @@ export {
     disconnectDevice,
     getDeviceAlias,
     setDeviceAlias,
+    setDeviceHidden,
+    getHiddenDevices,
+    adbConnect,
+    adbDisconnect,
     getDeviceSettings,
     setDeviceSettings,
     getDeviceSummary,

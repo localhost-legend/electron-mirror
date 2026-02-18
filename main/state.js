@@ -18,4 +18,5 @@ export default {
     streamHistory: [],
     isScrcpyDownloading: false,
     isAdbReady: false,
+    debugStatsEnabled: false,
 };

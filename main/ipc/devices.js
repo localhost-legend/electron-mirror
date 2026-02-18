@@ -6,6 +6,10 @@ import {
     disconnectDevice,
     getDeviceAlias,
     setDeviceAlias,
+    setDeviceHidden,
+    getHiddenDevices,
+    adbConnect,
+    adbDisconnect,
     getDeviceSettings,
     setDeviceSettings,
     getDeviceSummary,
@@ -38,6 +42,31 @@ function registerDeviceHandlers({ getAdbPath, launchScreenMirror, createDeviceSe
 
     ipcMain.handle('set-device-alias', async (event, serial, alias) => {
         return setDeviceAlias(serial, alias);
+    });
+
+    ipcMain.handle('set-device-hidden', async (event, serial, hidden) => {
+        return setDeviceHidden(serial, hidden);
+    });
+
+    ipcMain.handle('get-hidden-devices', async () => {
+        return getHiddenDevices();
+    });
+
+    ipcMain.handle('adb-connect', async (event, target) => {
+        return adbConnect(getAdbPath, target);
+    });
+
+    ipcMain.handle('adb-disconnect', async (event, target) => {
+        return adbDisconnect(getAdbPath, target);
+    });
+
+    ipcMain.handle('get-debug-options', () => ({
+        statsEnabled: !!state.debugStatsEnabled
+    }));
+
+    ipcMain.handle('set-debug-stats', (event, enabled) => {
+        state.debugStatsEnabled = !!enabled;
+        return state.debugStatsEnabled;
     });
 
     ipcMain.handle('get-current-serial', () => getCurrentSerial());
