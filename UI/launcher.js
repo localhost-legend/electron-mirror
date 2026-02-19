@@ -22,6 +22,7 @@ let hiddenListEl = null;
 let addDeviceForm = null;
 let addDeviceInput = null;
 let toggleStats = null;
+let toggleConnTime = null;
 let hiddenBackButton = null;
 
 contextMenu = document.getElementById('device-context-menu');
@@ -45,6 +46,7 @@ hiddenListEl = document.getElementById('hidden-device-list');
 addDeviceForm = document.getElementById('add-device-form');
 addDeviceInput = document.getElementById('add-device-input');
 toggleStats = document.getElementById('toggle-stats');
+toggleConnTime = document.getElementById('toggle-conn-time');
 hiddenBackButton = document.getElementById('hidden-back');
 
 if (launcherMenuButton) {
@@ -73,6 +75,12 @@ if (launcherMenu) {
 if (toggleStats) {
     toggleStats.addEventListener('change', async () => {
         await ipcRenderer.invoke('set-debug-stats', toggleStats.checked);
+    });
+}
+
+if (toggleConnTime) {
+    toggleConnTime.addEventListener('change', async () => {
+        await ipcRenderer.invoke('set-debug-connection-time', toggleConnTime.checked);
     });
 }
 
@@ -282,12 +290,13 @@ function showToast(message) {
 }
 
 async function refreshDebugOptions() {
-    if (!toggleStats) return;
     try {
         const options = await ipcRenderer.invoke('get-debug-options');
-        toggleStats.checked = !!options?.statsEnabled;
+        if (toggleStats) toggleStats.checked = !!options?.statsEnabled;
+        if (toggleConnTime) toggleConnTime.checked = !!options?.connectionTimeEnabled;
     } catch (e) {
-        toggleStats.checked = false;
+        if (toggleStats) toggleStats.checked = false;
+        if (toggleConnTime) toggleConnTime.checked = false;
     }
 }
 

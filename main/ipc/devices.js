@@ -17,6 +17,7 @@ import {
     getCurrentSerial,
     getDeviceInfo
 } from '../services/device-service.js';
+import { setConnectionTimeDebugEnabled } from '../services/scrcpy-service.js';
 
 function registerDeviceHandlers({ getAdbPath, launchScreenMirror, createDeviceSettingsWindow }) {
     ipcMain.handle('get-devices', async () => {
@@ -61,12 +62,17 @@ function registerDeviceHandlers({ getAdbPath, launchScreenMirror, createDeviceSe
     });
 
     ipcMain.handle('get-debug-options', () => ({
-        statsEnabled: !!state.debugStatsEnabled
+        statsEnabled: !!state.debugStatsEnabled,
+        connectionTimeEnabled: !!state.debugConnTimeEnabled
     }));
 
     ipcMain.handle('set-debug-stats', (event, enabled) => {
         state.debugStatsEnabled = !!enabled;
         return state.debugStatsEnabled;
+    });
+
+    ipcMain.handle('set-debug-connection-time', (event, enabled) => {
+        return setConnectionTimeDebugEnabled(enabled);
     });
 
     ipcMain.handle('get-current-serial', () => getCurrentSerial());

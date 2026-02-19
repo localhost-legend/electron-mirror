@@ -13,7 +13,10 @@ let statsTimer = null;
 let videoBytes = 0;
 let audioBytes = 0;
 let videoFrames = 0;
+let connectionTimer = null;
+let connectionStartAt = null;
 const ENABLE_STATS_LOG = () => process.env.SCRCPY_STATS === '1' || state.debugStatsEnabled;
+const CONNECTION_TITLE_INTERVAL = 1000;
 
 // Video States
 const V_DUMMY = 0, V_DEVICE_NAME = 1, V_CODEC_META = 2, V_HEADER = 3, V_PAYLOAD = 4;
@@ -87,6 +90,53 @@ function emitAudioPacket(payload) {
         return;
     }
     state.mainWindow.webContents.send('scrcpy-audio-packet', { data: toArrayBuffer(payload) });
+}
+
+function formatDuration(ms) {
+    if (!Number.isFinite(ms) || ms < 0) ms = 0;
+    const totalSeconds = Math.floor(ms / 1000);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    const ss = String(seconds).padStart(2, '0');
+    return `${hh}:${mm}:${ss}`;
+}
+
+function getBaseWindowTitle() {
+    return state.selectedAlias || state.selectedModel || state.selectedSerial || 'Screen Mirror';
+}
+
+function updateConnectionTitle() {
+    if (!state.mainWindow || state.mainWindow.isDestroyed()) return;
+    const baseTitle = getBaseWindowTitle();
+    if (!state.debugConnTimeEnabled || !connectionStartAt) {
+        state.mainWindow.setTitle(baseTitle);
+        return;
+    }
+    const elapsed = Date.now() - connectionStartAt;
+    state.mainWindow.setTitle(`${baseTitle} - ${formatDuration(elapsed)}`);
+}
+
+function stopConnectionTimer() {
+    if (connectionTimer) {
+        clearInterval(connectionTimer);
+        connectionTimer = null;
+    }
+}
+
+function startConnectionTimer() {
+    if (!state.debugConnTimeEnabled || !connectionStartAt) return;
+    if (connectionTimer) return;
+    updateConnectionTitle();
+    connectionTimer = setInterval(() => {
+        if (!state.debugConnTimeEnabled || !connectionStartAt) {
+            stopConnectionTimer();
+            return;
+        }
+        updateConnectionTitle();
+    }, CONNECTION_TITLE_INTERVAL);
 }
 
 function parseVideo() {
@@ -207,6 +257,9 @@ function stopScrcpy() {
     videoBytes = 0;
     audioBytes = 0;
     videoFrames = 0;
+    connectionStartAt = null;
+    stopConnectionTimer();
+    updateConnectionTitle();
 
     videoBuffer = Buffer.alloc(0);
     audioBuffer = Buffer.alloc(0);
@@ -392,12 +445,28 @@ function sendInputEvent(event) {
 
 function handleRendererReady() {
     rendererReady = true;
+    connectionStartAt = Date.now();
+    startConnectionTimer();
+    updateConnectionTitle();
     flushStreamHistory();
+}
+
+function setConnectionTimeDebugEnabled(enabled) {
+    state.debugConnTimeEnabled = !!enabled;
+    if (!state.debugConnTimeEnabled) {
+        stopConnectionTimer();
+        updateConnectionTitle();
+        return state.debugConnTimeEnabled;
+    }
+    startConnectionTimer();
+    updateConnectionTitle();
+    return state.debugConnTimeEnabled;
 }
 
 export {
     startScrcpy,
     stopScrcpy,
     sendInputEvent,
-    handleRendererReady
+    handleRendererReady,
+    setConnectionTimeDebugEnabled
 };

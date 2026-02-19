@@ -19,4 +19,5 @@ export default {
     isScrcpyDownloading: false,
     isAdbReady: false,
     debugStatsEnabled: false,
+    debugConnTimeEnabled: false,
 };
