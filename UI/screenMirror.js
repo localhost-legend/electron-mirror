@@ -11,6 +11,14 @@ let audioGain = null;
 let audioStartTime = 0;
 let decodedFrames = 0;
 let lastFpsTime = performance.now();
+let lastAudioResync = 0;
+
+const AUDIO_SAMPLE_RATE = 48000;
+const AUDIO_MIN_LEAD = 0.02;
+const AUDIO_TARGET_LEAD = 0.06;
+const AUDIO_MAX_QUEUE = 0.25;
+const AUDIO_RESYNC_MIN_INTERVAL = 0.5;
+const audioSources = [];
 
 // FAILSAFE: Drop initial packets
 let audioDropCounter = 5;
@@ -148,11 +156,12 @@ async function playPCM(data) {
     if (audioGain && audioGain.gain.value < 1.0) audioGain.gain.value = 1.0;
 
     const rawData = new Int16Array(data.buffer, data.byteOffset, data.byteLength / 2);
-    const floatData = new Float32Array(rawData.length);
+    let floatData = new Float32Array(rawData.length);
     for (let i = 0; i < rawData.length; i++) floatData[i] = rawData[i] / 32768.0;
-    if (floatData.length === 0) return;
+    if (floatData.length < 2) return;
+    if (floatData.length % 2 !== 0) floatData = floatData.subarray(0, floatData.length - 1);
 
-    const audioBuffer = audioCtx.createBuffer(2, floatData.length / 2, 48000);
+    const audioBuffer = audioCtx.createBuffer(2, floatData.length / 2, AUDIO_SAMPLE_RATE);
     const left = audioBuffer.getChannelData(0);
     const right = audioBuffer.getChannelData(1);
 
@@ -165,9 +174,30 @@ async function playPCM(data) {
     source.buffer = audioBuffer;
     source.connect(audioGain);
 
-    if (audioStartTime < audioCtx.currentTime) audioStartTime = audioCtx.currentTime + 0.05;
-    source.start(audioStartTime);
-    audioStartTime += audioBuffer.duration;
+    const now = audioCtx.currentTime;
+    for (let i = audioSources.length - 1; i >= 0; i--) {
+        if (audioSources[i].endTime <= now) audioSources.splice(i, 1);
+    }
+
+    if (audioStartTime < now) audioStartTime = now + AUDIO_MIN_LEAD;
+    const queued = audioStartTime - now;
+    if (queued > AUDIO_MAX_QUEUE) {
+        if ((now - lastAudioResync) > AUDIO_RESYNC_MIN_INTERVAL) {
+            lastAudioResync = now;
+            for (const item of audioSources) {
+                try { item.source.stop(); } catch (e) { }
+            }
+            audioSources.length = 0;
+            audioStartTime = now + AUDIO_TARGET_LEAD;
+        } else {
+            return;
+        }
+    }
+
+    const startAt = Math.max(audioStartTime, now + AUDIO_MIN_LEAD);
+    source.start(startAt);
+    audioStartTime = startAt + audioBuffer.duration;
+    audioSources.push({ source, endTime: audioStartTime });
 }
 
 async function start() {
@@ -289,7 +319,7 @@ async function start() {
         };
     }
 
-    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+    audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: AUDIO_SAMPLE_RATE });
     audioGain = audioCtx.createGain();
     audioGain.gain.value = 0.0;
     audioGain.connect(audioCtx.destination);
