@@ -5,7 +5,7 @@ import { checkForUpdates, downloadScrcpy } from './version-manager.js';
 import { createLauncherWindow, createOverviewWindow, createDeviceSettingsWindow, createMainWindow, snapWindowToRatio, updateWindowAspectRatio } from './windows.js';
 import { startScrcpy, stopScrcpy } from './services/scrcpy-service.js';
 import { registerIpcHandlers } from './ipc/handlers.js';
-import { startDeviceMonitor, clearTrackedDevice, setAdbPath, stopAdbServer,initAdb } from './adb.js';
+import { startDeviceMonitor, clearTrackedDevice, setAdbPath, stopAdbServer, initAdb, client } from './adb.js';
 
 process.on('uncaughtException', (error) => {
     if(error.code === 'ECONNRESET' || error.message.includes('ECONNRESET')) {
@@ -29,26 +29,88 @@ function notifyScrcpyStatus() {
     });
 }
 
+const TRACKED_DISCONNECT_GRACE_MS = 8000;
+let trackedDisconnectTimer = null;
+let trackedDisconnectSerial = null;
+
+function clearTrackedDisconnectTimer() {
+    if (trackedDisconnectTimer) {
+        clearTimeout(trackedDisconnectTimer);
+        trackedDisconnectTimer = null;
+    }
+    trackedDisconnectSerial = null;
+}
+
+async function isTrackedDeviceOnline(serial) {
+    if (!serial) return false;
+    try {
+        const devices = await client.listDevices();
+        return devices.some((d) => d.id === serial && d.type === 'device');
+    } catch (e) {
+        console.warn('[ADB] Failed to check device status:', e);
+        return false;
+    }
+}
+
+function handleTrackedDisconnectNow(serial, type) {
+    if (state.mainWindow && !state.mainWindow.isDestroyed()) {
+        state.mainWindow.close();
+        clearTrackedDevice(serial);
+    }
+    if (state.overviewWindow && !state.overviewWindow.isDestroyed()) {
+        state.overviewWindow.close();
+        clearTrackedDevice(serial);
+    }
+    if (state.launcherWindow && !state.launcherWindow.isDestroyed()) {
+        state.launcherWindow.webContents.send('connection-failed', '裝置已中斷連線');
+        clearTrackedDevice(serial);
+    }
+}
+
+function scheduleTrackedDisconnectCheck(serial, type) {
+    if (!serial) return;
+    if (trackedDisconnectSerial && trackedDisconnectSerial !== serial) {
+        clearTrackedDisconnectTimer();
+    }
+    trackedDisconnectSerial = serial;
+    if (trackedDisconnectTimer) return;
+
+    trackedDisconnectTimer = setTimeout(async () => {
+        trackedDisconnectTimer = null;
+        const stillOnline = await isTrackedDeviceOnline(serial);
+        if (stillOnline) {
+            console.warn(`[ADB] Tracked device recovered: ${serial}`);
+            clearTrackedDisconnectTimer();
+            return;
+        }
+        handleTrackedDisconnectNow(serial, type);
+        clearTrackedDisconnectTimer();
+    }, TRACKED_DISCONNECT_GRACE_MS);
+}
+
 const deviceMonitorOptions = {
     onDevicesChanged: () => {
         if (state.launcherWindow && !state.launcherWindow.isDestroyed()) {
             state.launcherWindow.webContents.send('devices-changed');
         }
     },
-    onTrackedDeviceDisconnected: ({ serial, type }) => {
+    onTrackedDeviceChange: ({ serial, type, isConnected }) => {
+        if (trackedDisconnectSerial && serial === trackedDisconnectSerial && isConnected) {
+            console.warn(`[ADB] Tracked device reconnected: ${serial} (${type})`);
+            clearTrackedDisconnectTimer();
+        }
+    },
+    onTrackedDeviceDisconnected: ({ serial, type, eventType }) => {
         console.warn(`[ADB] Tracked device disconnected: ${serial} (${type})`);
-        if (state.mainWindow && !state.mainWindow.isDestroyed()) {
-            state.mainWindow.close();
-            clearTrackedDevice(serial);
+        if (eventType === 'remove') {
+            handleTrackedDisconnectNow(serial, type);
+            return;
         }
-        if (state.overviewWindow && !state.overviewWindow.isDestroyed()) {
-            state.overviewWindow.close();
-            clearTrackedDevice(serial);
+        if (type === 'offline' || type === 'unauthorized') {
+            scheduleTrackedDisconnectCheck(serial, type);
+            return;
         }
-        if (state.launcherWindow && !state.launcherWindow.isDestroyed()) {
-            state.launcherWindow.webContents.send('connection-failed', '裝置已中斷連線');
-            clearTrackedDevice(serial);
-        }
+        handleTrackedDisconnectNow(serial, type);
     }
 };
 
