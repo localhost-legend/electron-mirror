@@ -288,7 +288,7 @@ async function startScrcpy({ adbPath, scrcpyServerPath, scrcpyVersion }) {
 
         if (bitRateMbps > 0) {
             const bitRate = Math.round(bitRateMbps * 1000000);
-            opts.push(`bit_rate=${bitRate}`);
+            opts.push(`video_bit_rate=${bitRate}`);
         }
 
         const cmd = `CLASSPATH=/data/local/tmp/scrcpy-server.jar app_process / com.genymobile.scrcpy.Server ${scrcpyVersion} ${opts.join(' ')}`;

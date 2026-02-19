@@ -54,6 +54,7 @@ function registerScrcpyHandlers({
 
     ipcMain.on('scrcpy-client-stats', (event, payload) => {
         if (!payload) return;
+        if (!state.debugStatsEnabled) return;
         if (payload.decodedFps !== undefined) {
             console.log(`[Stats] decoded_fps=${payload.decodedFps}`);
         }
